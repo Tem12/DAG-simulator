@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "standard_miner.hpp"
 
@@ -36,6 +37,30 @@ random_real(boost::random::mt19937& rng, double min, double max)
 {
     boost::random::uniform_real_distribution<> d(min,max);
     return d(rng);
+}
+
+int txID = 1;
+void
+mempool_update(std::vector<Miner*>& miners, CScheduler& s)
+{
+    std::random_device rd; // obtain a random number from hardware
+    std::mt19937 gen(rd()); // seed the generator
+    std::uniform_int_distribution<> distr(1, 100); // define the range
+    for (int i=0; i<distr(gen); i++) {
+        // distr(gen) // generate numbers
+        int in = distr(gen);
+        for (auto miner : miners)
+            miner->mem_pool.insert(Record{in,txID});
+        txID++;
+    }
+
+    // every 30 second add new transactions
+    double tNext = s.getSimTime() + 30;
+    // n_blocks * 10 min mean time * 60 seconds
+    if (tNext < 450*10*60) {
+        auto f = boost::bind(&mempool_update, miners, boost::ref(s));
+        s.schedule(f, tNext);
+    }
 }
 
 int
@@ -60,11 +85,16 @@ run_simulation(boost::random::mt19937& rng, int n_blocks,
         int which_miner = dist(rng);
         block_owners.insert(std::make_pair(i, which_miner));
         auto t_delta = block_time_gen()*600.0;
+#ifdef TRACE
+        std::cout << t_delta << "\n";
+#endif
         auto t_found = t + t_delta;
         auto f = boost::bind(&Miner::FindBlock, miners[which_miner], boost::ref(simulator), i);
         simulator.schedule(f, t_found);
         t = t_found;
     }
+
+    mempool_update(miners, simulator);
 
     simulator.serviceQueue();
 
@@ -95,7 +125,7 @@ int main(int argc, char** argv)
     po::options_description desc("Command-line options");
     desc.add_options()
         ("help", "show options")
-        ("blocks", po::value<int>(&n_blocks)->default_value(2016), "number of blocks to simulate")
+        ("blocks", po::value<int>(&n_blocks)->default_value(450), "number of blocks to simulate")
         ("latency", po::value<double>(&block_latency)->default_value(1.0), "block relay/validate latency (in seconds) to simulate")
         ("runs", po::value<int>(&n_runs)->default_value(1), "number of times to run simulation")
         ("rng_seed", po::value<int>(&rng_seed)->default_value(0), "random number generator seed")
@@ -188,7 +218,7 @@ int main(int argc, char** argv)
         std::vector<int> blocks_found;
         int best_chain_length = run_simulation(rng, n_blocks, miners, blocks_found);
         best_chain_sum += best_chain_length;
-        fraction_orphan_sum += 1.0 - (double)best_chain_length/(double)n_blocks;;
+        fraction_orphan_sum += 1.0 - (double)best_chain_length/(double)n_blocks;
         for (int i = 0; i < blocks_found.size(); i++) blocks_found_sum[i] += blocks_found[i];
     }
 
