@@ -90,6 +90,7 @@
         "locale": "cpp",
         "queue": "cpp",
         "semaphore": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "__functional_03": "cpp"
     }
 }

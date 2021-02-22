@@ -21,33 +21,27 @@
 #include <string>
 #include <vector>
 #include <random>
+#include <cstdint>
 
 #include "standard_miner.hpp"
 
 
-static void
-Connect(Miner* m1, Miner* m2, double latency)
-{
+static void Connect(Miner* m1, Miner* m2, double latency) {
     m1->AddPeer(m2, latency);
     m2->AddPeer(m1, latency);
 }
 
-double
-random_real(boost::random::mt19937& rng, double min, double max)
-{
+double random_real(boost::random::mt19937& rng, double min, double max) {
     boost::random::uniform_real_distribution<> d(min,max);
     return d(rng);
 }
 
-int txID = 1;
-void
-mempool_update(std::vector<Miner*>& miners, CScheduler& s)
-{
-    std::random_device rd; // obtain a random number from hardware
+uint64_t txID = 1;
+void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
+    std::random_device rd;  // obtain a random number from hardware
     std::mt19937 gen(rd()); // seed the generator
-    std::uniform_int_distribution<> distr(1, 100); // define the range
+    std::uniform_int_distribution<> distr(1, 200); // define the range
     for (int i=0; i<distr(gen); i++) {
-        // distr(gen) // generate numbers
         int in = distr(gen);
         for (auto miner : miners)
             miner->mem_pool.insert(Record{txID,in});
@@ -55,7 +49,7 @@ mempool_update(std::vector<Miner*>& miners, CScheduler& s)
     }
 
     // every 30 second add new transactions
-    double tNext = s.getSimTime() + 7;
+    double tNext = s.getSimTime() + 10;
     // n_blocks * 10 min mean time * 60 seconds
     if (tNext < 450*10*60) {
         auto f = boost::bind(&mempool_update, miners, boost::ref(s));
@@ -63,17 +57,16 @@ mempool_update(std::vector<Miner*>& miners, CScheduler& s)
     }
 }
 
-int
-run_simulation(boost::random::mt19937& rng, int n_blocks,
-               std::vector<Miner*>& miners, std::vector<int>& blocks_found)
-{
+int run_simulation(boost::random::mt19937& rng, int n_blocks,
+                std::vector<Miner*>& miners, std::vector<int>& blocks_found) {
     CScheduler simulator;
 
     std::vector<double> probabilities;
     for (auto miner : miners) probabilities.push_back(miner->GetHashFraction());
-    boost::random::discrete_distribution<> dist(probabilities.begin(), probabilities.end());
-
-    boost::random::variate_generator<boost::random::mt19937&, boost::random::exponential_distribution<>>
+    boost::random::discrete_distribution<> dist(probabilities.begin(),
+                                                probabilities.end());
+    boost::random::variate_generator<boost::random::mt19937&,
+                                     boost::random::exponential_distribution<>>
         block_time_gen(rng, boost::random::exponential_distribution<>(1.0));
 
     std::map<int, int> block_owners; // Map block number to miner who found that block
@@ -89,7 +82,8 @@ run_simulation(boost::random::mt19937& rng, int n_blocks,
         // std::cout << t_delta << "\n";
 #endif
         auto t_found = t + t_delta;
-        auto f = boost::bind(&Miner::FindBlock, miners[which_miner], boost::ref(simulator), i);
+        auto f = boost::bind(&Miner::FindBlock, miners[which_miner],
+                             boost::ref(simulator), i);
         simulator.schedule(f, t_found);
         t = t_found;
     }
@@ -112,8 +106,7 @@ run_simulation(boost::random::mt19937& rng, int n_blocks,
     return best_chain.size();
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     namespace po = boost::program_options;
 
     int n_blocks = 2016;
@@ -125,20 +118,26 @@ int main(int argc, char** argv)
     po::options_description desc("Command-line options");
     desc.add_options()
         ("help", "show options")
-        ("blocks", po::value<int>(&n_blocks)->default_value(450), "number of blocks to simulate")
-        ("latency", po::value<double>(&block_latency)->default_value(1.0), "block relay/validate latency (in seconds) to simulate")
-        ("runs", po::value<int>(&n_runs)->default_value(1), "number of times to run simulation")
-        ("rng_seed", po::value<int>(&rng_seed)->default_value(0), "random number generator seed")
-        ("config", po::value<std::string>(&config_file)->default_value("mining.cfg"), "Mining config filename")
-        ;
+        ("blocks", po::value<int>(&n_blocks)->default_value(2016),
+                   "number of blocks to simulate")
+        ("latency", po::value<double>(&block_latency)->default_value(1.0),
+                    "block relay/validate latency (in seconds) to simulate")
+        ("runs", po::value<int>(&n_runs)->default_value(1),
+                 "number of times to run simulation")
+        ("rng_seed", po::value<int>(&rng_seed)->default_value(0),
+                     "random number generator seed")
+        ("config", po::value<std::string>(&config_file)->default_value("mining.cfg"),
+                   "Mining config filename");
     po::variables_map vm;
 
     po::options_description config("Mining config file options");
     config.add_options()
-        ("miner", po::value<std::vector<std::string>>()->composing(), "hashrate type")
-        ("biconnect", po::value<std::vector<std::string>>()->composing(), "m n connection_latency")
-        ("description", po::value<std::string>(), "Configuration description")
-        ;
+        ("miner", po::value<std::vector<std::string>>()->composing(),
+                  "hashrate type")
+        ("biconnect", po::value<std::vector<std::string>>()->composing(),
+                      "m n connection_latency")
+        ("description", po::value<std::string>(),
+                        "Configuration description");
 
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
@@ -174,7 +173,8 @@ int main(int argc, char** argv)
             latency = atof(v[2].c_str());
         }
         if (v[1] == "standard") {
-            miners.push_back(new Miner(hashpower, latency, boost::bind(random_real, boost::ref(rng), _1, _2)));
+            miners.push_back(new Miner(hashpower, latency,
+                             boost::bind(random_real, boost::ref(rng), _1, _2)));
         }
         else {
             std::cout << "Couldn't parse miner description: " << m << "\n";
@@ -199,7 +199,8 @@ int main(int argc, char** argv)
         Connect(miners[m1], miners[m2], latency);
     }
 
-    std::cout << "Simulating " << n_blocks << " blocks, default latency " << block_latency << "secs, ";
+    std::cout << "Simulating " << n_blocks << " blocks, default latency "
+              << block_latency << "secs, ";
     std::cout << "with " << miners.size() << " miners over " << n_runs << " runs\n";
     if (vm.count("description")) {
         std::cout << "Configuration: " << vm["description"].as<std::string>() << "\n";
@@ -219,7 +220,8 @@ int main(int argc, char** argv)
         int best_chain_length = run_simulation(rng, n_blocks, miners, blocks_found);
         best_chain_sum += best_chain_length;
         fraction_orphan_sum += 1.0 - (double)best_chain_length/(double)n_blocks;
-        for (int i = 0; i < blocks_found.size(); i++) blocks_found_sum[i] += blocks_found[i];
+        for (int i = 0; i < blocks_found.size(); i++)
+            blocks_found_sum[i] += blocks_found[i];
     }
 
     std::cout.precision(4);
