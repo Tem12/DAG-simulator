@@ -6,8 +6,8 @@
     "configurations": [
         {
             "name": "(gdb) Launch",
-            "type": "cppdbg",
-            // "type": "lldb",
+            // "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/mining_simulator",
             "args": [],

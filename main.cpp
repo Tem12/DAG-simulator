@@ -50,12 +50,12 @@ mempool_update(std::vector<Miner*>& miners, CScheduler& s)
         // distr(gen) // generate numbers
         int in = distr(gen);
         for (auto miner : miners)
-            miner->mem_pool.insert(Record{in,txID});
+            miner->mem_pool.insert(Record{txID,in});
         txID++;
     }
 
     // every 30 second add new transactions
-    double tNext = s.getSimTime() + 30;
+    double tNext = s.getSimTime() + 7;
     // n_blocks * 10 min mean time * 60 seconds
     if (tNext < 450*10*60) {
         auto f = boost::bind(&mempool_update, miners, boost::ref(s));
@@ -86,7 +86,7 @@ run_simulation(boost::random::mt19937& rng, int n_blocks,
         block_owners.insert(std::make_pair(i, which_miner));
         auto t_delta = block_time_gen()*600.0;
 #ifdef TRACE
-        std::cout << t_delta << "\n";
+        // std::cout << t_delta << "\n";
 #endif
         auto t_found = t + t_delta;
         auto f = boost::bind(&Miner::FindBlock, miners[which_miner], boost::ref(simulator), i);

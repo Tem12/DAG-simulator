@@ -10,6 +10,12 @@
 #include <set>
 #include <utility>
 
+#include <boost/multi_index_container.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/multi_index/identity.hpp>
+
 class Miner;
 class PeerInfo {
 public:
@@ -21,30 +27,46 @@ public:
     double latency;
 };
 
+using namespace boost::multi_index;
+
 struct Record {
-	int fee;
-	int ID;
+  int id;
+  int fee;
+
+  Record(int id, int fee):id(id),fee(fee){}
+
+  bool operator<  (const Record& a) const{return fee<a.fee;}
+  bool operator== (const Record& a) const{return id==a.id;}
 };
 
 struct Block {
-    std::vector<Record> trans;
+    std::vector<Record> txn;
 };
 
-bool operator < (const Record& l, const Record& r) {
-	if (l.fee < r.fee)
-		return true;
-	return false;
-};
+typedef multi_index_container <
+  Record,
+  indexed_by<
+    hashed_unique< member<Record, int, &Record::id> >,
+    ordered_non_unique< member<Record, int, &Record::fee> >
+  >
+> Mempool;
+
+// typedef Mempool::nth_index<0>::type Mempool_byID;
+// typedef Mempool::nth_index<1>::type Mempool_byFee;
+void print_pool(Mempool mp) {
+    Mempool::nth_index<1>::type &fee_index = mp.get<1>();
+    for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
+        std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
+    }
+    std::cout << "\n";
+}
 
 class Miner
 {
 public:
     // public
     std::shared_ptr<std::vector<Block>> blocks;
-    // std::vector<Block> blocks;
-    std::multiset<Record> mem_pool;
-    // std::shared_ptr<std::vector<Block>> blocks;
-    // std::vector<Block> blocks;
+    Mempool mem_pool;
 
     // Return a random double in the range passed.
     typedef boost::function<double(double, double)> JitterFunction;
@@ -68,23 +90,22 @@ public:
         // Transactions in block
         auto blocks_copy = std::make_shared<std::vector<Block>>(blocks->begin(),
                                                                 blocks->end());
+
+        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
         Block tmp_block;
         int i = 0;
-        for (const auto& elem: mem_pool) {
-            tmp_block.trans.push_back(elem);
-            // mem_pool.erase(elem);
-            if (i >= 2000) break; // max 2000 transactions
+        for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
+            // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
+            tmp_block.txn.push_back(Record{it->id, it->fee});
+            if (i >= 3000) break; // max 3000 transactions in block
             i++;
         }
-        // a.trans.push_back(Record{5,10});
         blocks_copy->push_back(tmp_block);
         blocks = blocks_copy;
-        // auto it = blocks.begin();
-        // blocks_copy[blockNumber]->trans.push_back(Record{5,10});
 
 #ifdef TRACE
-        std::cout << "Miner " << hash_fraction << " found block at simulation time "
-                  << s.getSimTime() << "\n";
+        // std::cout << "Miner " << hash_fraction << " found block at simulation time "
+        //           << s.getSimTime() << "\n";
 #endif
         RelayChain(this, s, chain_copy, blocks_copy, block_latency);
     }
@@ -94,12 +115,19 @@ public:
                                std::shared_ptr<std::vector<Block>> blck, double latency) {
         if (chain->size() > best_chain->size()) {
 #ifdef TRACE
-            std::cout << "Miner " << hash_fraction
-                      << " relaying chain at simulation time " << s.getSimTime() << "\n";
+            // std::cout << "Miner " << hash_fraction
+            //           << " relaying chain at simulation time " << s.getSimTime() << "\n";
 #endif
             best_chain = chain;
             blocks = blck;
             // TODO change local mempool
+            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+            auto a = blocks.get();
+            Block tmp_block = *a->rbegin();
+            for (auto &elem: tmp_block.txn) {
+                // std::cout << elem.fee;
+                id_index.erase(elem.id);
+            }
             RelayChain(from, s, chain, blck, latency);
         }
     }
