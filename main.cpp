@@ -40,7 +40,17 @@ uint64_t txID = 1;
 void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
     std::random_device rd;  // obtain a random number from hardware
     std::mt19937 gen(rd()); // seed the generator
-    std::uniform_int_distribution<> distr(1, 200); // define the range
+    std::uniform_int_distribution<> distr(10, 200); // define the range
+
+    if (txID < 10) {
+        for (int i=0; i<90000; i++) {
+            int in = distr(gen);
+            for (auto miner:miners)
+                miner->mem_pool.insert(Record{txID,in});
+            txID++;
+        }
+    }
+
     for (int i=0; i<distr(gen); i++) {
         int in = distr(gen);
         for (auto miner : miners)
@@ -49,16 +59,18 @@ void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
     }
 
     // every 30 second add new transactions
-    double tNext = s.getSimTime() + 10;
+    double tNext = s.getSimTime() + 20;
     // n_blocks * 10 min mean time * 60 seconds
-    if (tNext < 450*10*60) {
+    if (tNext < 50*1000) {
         auto f = boost::bind(&mempool_update, miners, boost::ref(s));
         s.schedule(f, tNext);
     }
 }
 
-int run_simulation(boost::random::mt19937& rng, int n_blocks,
-                std::vector<Miner*>& miners, std::vector<int>& blocks_found) {
+int run_simulation(boost::random::mt19937& rng,
+                   int n_blocks,
+                   std::vector<Miner*>& miners)
+{
     CScheduler simulator;
 
     std::vector<double> probabilities;
@@ -73,11 +85,12 @@ int run_simulation(boost::random::mt19937& rng, int n_blocks,
 
     // This loops primes the simulation with n_blocks being found at random intervals
     // starting from t=0:
+    double lambda = 600.0;
     double t = 0.0;
     for (int i = 0; i < n_blocks; i++) {
         int which_miner = dist(rng);
         block_owners.insert(std::make_pair(i, which_miner));
-        auto t_delta = block_time_gen()*600.0;
+        auto t_delta = block_time_gen()*lambda;
 #ifdef TRACE
         // std::cout << t_delta << "\n";
 #endif
@@ -92,18 +105,20 @@ int run_simulation(boost::random::mt19937& rng, int n_blocks,
 
     simulator.serviceQueue();
 
-    blocks_found.clear();
-    blocks_found.insert(blocks_found.begin(), miners.size(), 0);
+    miners[0]->PrintStats();
+    // blocks_found.clear();
+    // blocks_found.insert(blocks_found.begin(), miners.size(), 0);
 
     // Run through miner0's idea of the best chain to count
     // how many blocks each miner found in that chain:
-    std::vector<int> best_chain = miners[0]->GetBestChain();
-    for (int i = 0; i < best_chain.size(); i++) {
-        int b = best_chain[i];
-        int m = block_owners[b];
-        ++blocks_found[m];
-    }
-    return best_chain.size();
+    // std::vector<int> best_chain = miners[0]->GetBestChain();
+    // for (int i = 0; i < best_chain.size(); i++) {
+    //     int b = best_chain[i];
+    //     int m = block_owners[b];
+    //     ++blocks_found[m];
+    // }
+    // return best_chain.size();
+    return 0;
 }
 
 int main(int argc, char** argv) {
@@ -118,9 +133,9 @@ int main(int argc, char** argv) {
     po::options_description desc("Command-line options");
     desc.add_options()
         ("help", "show options")
-        ("blocks", po::value<int>(&n_blocks)->default_value(2016),
+        ("blocks", po::value<int>(&n_blocks)->default_value(50),
                    "number of blocks to simulate")
-        ("latency", po::value<double>(&block_latency)->default_value(1.0),
+        ("latency", po::value<double>(&block_latency)->default_value(10.0),
                     "block relay/validate latency (in seconds) to simulate")
         ("runs", po::value<int>(&n_runs)->default_value(1),
                  "number of times to run simulation")
@@ -206,40 +221,40 @@ int main(int argc, char** argv) {
         std::cout << "Configuration: " << vm["description"].as<std::string>() << "\n";
     }
 
-    int best_chain_sum = 0;
-    double fraction_orphan_sum = 0.0;
-    std::vector<int> blocks_found_sum;
-    blocks_found_sum.assign(miners.size(), 0);
+    // int best_chain_sum = 0;
+    // double fraction_orphan_sum = 0.0;
+    // std::vector<int> blocks_found_sum;
+    // blocks_found_sum.assign(miners.size(), 0);
     for (int run = 0; run < n_runs; run++) {
 #ifdef TRACE
         std::cout << "Run " << run << "\n";
 #endif
-        for (auto miner : miners) miner->ResetChain();
+        // for (auto miner : miners) miner->ResetChain();
 
-        std::vector<int> blocks_found;
-        int best_chain_length = run_simulation(rng, n_blocks, miners, blocks_found);
-        best_chain_sum += best_chain_length;
-        fraction_orphan_sum += 1.0 - (double)best_chain_length/(double)n_blocks;
-        for (int i = 0; i < blocks_found.size(); i++)
-            blocks_found_sum[i] += blocks_found[i];
+        // std::vector<int> blocks_found;
+        int best_chain_length = run_simulation(rng, n_blocks, miners);
+        // best_chain_sum += best_chain_length;
+        // fraction_orphan_sum += 1.0 - (double)best_chain_length/(double)n_blocks;
+        // for (int i = 0; i < blocks_found.size(); i++)
+            // blocks_found_sum[i] += blocks_found[i];
     }
 
-    std::cout.precision(4);
-    std::cout << "Orphan rate: " << (fraction_orphan_sum*100.0)/n_runs << "%\n";
+    // std::cout.precision(4);
+    // std::cout << "Orphan rate: " << (fraction_orphan_sum*100.0)/n_runs << "%\n";
     std::cout << "Miner hashrate shares (%):";
     for (int i = 0; i < miners.size(); i++) {
         std::cout << " " << miners[i]->GetHashFraction()*100;
     }
     std::cout << "\n";
-    std::cout << "Miner block shares (%):";
+    // std::cout << "Miner block shares (%):";
 
-    for (int i = 0; i < miners.size(); i++) {
-        double average_blocks_found = (double)blocks_found_sum[i]/n_runs;
-        double average_best_chain = (double)best_chain_sum/n_runs;
-        double fraction = average_blocks_found/average_best_chain;
-        std::cout << " " << fraction*100;
-    }
-    std::cout << "\n";
+    // for (int i = 0; i < miners.size(); i++) {
+    //     double average_blocks_found = (double)blocks_found_sum[i]/n_runs;
+    //     double average_best_chain = (double)best_chain_sum/n_runs;
+    //     double fraction = average_blocks_found/average_best_chain;
+    //     std::cout << " " << fraction*100;
+    // }
+    // std::cout << "\n";
 
     return 0;
 }
