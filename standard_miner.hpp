@@ -71,16 +71,16 @@ public:
     std::map<int, bool> tx;
 
     int depth;
-    std::map<int, int> depth_map;
+    // std::map<int, int> depth_map;
 
     void PrintStats() {
         if(this->mID == 0) {
             std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size() << " => "
                 << std::setprecision(3) << 100-(((double)tx.size()/(double)txnum)*100) << "%\n";
-            for (const auto& [key, value] : depth_map) {
-                std::cout << "[" << key << ":" << value << "]";
-            }
-            std::cout << "\n";
+            // for (const auto& [key, value] : depth_map) {
+                // std::cout << "[" << key << ":" << value << "]";
+            // }
+            std::cout << "Blocks:" << 500 << " Depth:" << depth << " => " << (double)(500-depth) / 500.0 * 100 << "%\n";
         }
     }
 
@@ -120,13 +120,18 @@ public:
 
         depth++;
         tmp_block.depth = depth;
-        depth_map[blockNumber] = depth;
+        // depth_map[blockNumber] = depth;
+        // Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
 
         int i = 0;
         for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
             // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
             tmp_block.txn.push_back(Record{it->id, it->fee});
-            if (i >= 2000) break; // max 3000 transactions in block
+            if (this->mID == 0) {
+                tx[it->id] = true;
+            }
+            // id_index.erase(it->id);
+            if (i >= 2224) break; // max 3000 transactions in block
             i++;
         }
 
@@ -138,9 +143,9 @@ public:
         Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
         for (auto &elem: tmp_block.txn) {
             id_index.erase(elem.id);
-            if (this->mID == 0) {
-                tx[elem.id] = true;
-            }
+        //     if (this->mID == 0) {
+        //         tx[elem.id] = true;
+        //     }
         }
         // blocks_copy->push_back(tmp_block);
         // blocks = blocks_copy;
@@ -168,7 +173,7 @@ public:
             if (b.depth > depth) {
                 depth = b.depth;
             }
-            depth_map[b.id] = b.depth;
+            // depth_map[b.id] = b.depth;
 
             if (map_bcst.find(b.id) == map_bcst.end()) { // not found
                 map_bcst[b.id] = true;

@@ -43,7 +43,7 @@ void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
     std::uniform_int_distribution<> distr(10, 200); // define the range
 
     if (txID < 10) {
-        for (int i=0; i<90000; i++) {
+        for (int i=0; i<500000; i++) {
             int in = distr(gen);
             for (auto miner:miners)
                 miner->mem_pool.insert(Record{txID,in});
@@ -59,9 +59,9 @@ void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
     }
 
     // every 30 second add new transactions
-    double tNext = s.getSimTime() + 20;
+    double tNext = s.getSimTime() + 5;
     // n_blocks * 10 min mean time * 60 seconds
-    if (tNext < 50*1000) {
+    if (tNext < 500*1000) {
         auto f = boost::bind(&mempool_update, miners, boost::ref(s));
         s.schedule(f, tNext);
     }
@@ -85,7 +85,7 @@ int run_simulation(boost::random::mt19937& rng,
 
     // This loops primes the simulation with n_blocks being found at random intervals
     // starting from t=0:
-    double lambda = 600.0;
+    double lambda = 60.0;
     double t = 0.0;
     for (int i = 0; i < n_blocks; i++) {
         int which_miner = dist(rng);
@@ -133,13 +133,13 @@ int main(int argc, char** argv) {
     po::options_description desc("Command-line options");
     desc.add_options()
         ("help", "show options")
-        ("blocks", po::value<int>(&n_blocks)->default_value(50),
+        ("blocks", po::value<int>(&n_blocks)->default_value(500),
                    "number of blocks to simulate")
         ("latency", po::value<double>(&block_latency)->default_value(10.0),
                     "block relay/validate latency (in seconds) to simulate")
         ("runs", po::value<int>(&n_runs)->default_value(1),
                  "number of times to run simulation")
-        ("rng_seed", po::value<int>(&rng_seed)->default_value(0),
+        ("rng_seed", po::value<int>(&rng_seed)->default_value(73),
                      "random number generator seed")
         ("config", po::value<std::string>(&config_file)->default_value("mining.cfg"),
                    "Mining config filename");
@@ -241,11 +241,13 @@ int main(int argc, char** argv) {
 
     // std::cout.precision(4);
     // std::cout << "Orphan rate: " << (fraction_orphan_sum*100.0)/n_runs << "%\n";
+/*
     std::cout << "Miner hashrate shares (%):";
     for (int i = 0; i < miners.size(); i++) {
         std::cout << " " << miners[i]->GetHashFraction()*100;
     }
     std::cout << "\n";
+*/
     // std::cout << "Miner block shares (%):";
 
     // for (int i = 0; i < miners.size(); i++) {
