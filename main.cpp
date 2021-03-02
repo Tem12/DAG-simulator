@@ -36,14 +36,15 @@ double random_real(boost::random::mt19937& rng, double min, double max) {
     return d(rng);
 }
 
-uint64_t txID = 1;
+uint64_t txID = 0;
 void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
     std::random_device rd;  // obtain a random number from hardware
     std::mt19937 gen(rd()); // seed the generator
-    std::uniform_int_distribution<> distr(10, 200); // define the range
+    std::uniform_int_distribution<> distr(10, 150); // define the range
 
-    if (txID < 10) {
-        for (int i=0; i<500000; i++) {
+    // gen 1000 txs at the beginning of simulation to everybody's mempool
+    if (txID < 1) {
+        for (int i=0; i<1000; i++) {
             int in = distr(gen);
             for (auto miner:miners)
                 miner->mem_pool.insert(Record{txID,in});
@@ -51,17 +52,24 @@ void mempool_update(std::vector<Miner*>& miners, CScheduler& s) {
         }
     }
 
-    for (int i=0; i<distr(gen); i++) {
+    int max_mp_size = 10000;
+    int txsz = 65;
+    // gen 65 transactions
+    for (int i=0; i<txsz; i++) {
         int in = distr(gen);
-        for (auto miner : miners)
+        for (auto miner : miners) {
+            if (miner->mem_pool.size() + txsz > max_mp_size) {
+                miner->RemoveMP(txsz);
+            }
             miner->mem_pool.insert(Record{txID,in});
+        }
         txID++;
     }
 
-    // every 30 second add new transactions
-    double tNext = s.getSimTime() + 5;
+    // every 2 second add new transactions
+    double tNext = s.getSimTime() + 2;
     // n_blocks * 10 min mean time * 60 seconds
-    if (tNext < 500*1000) {
+    if (tNext < 100*600) {
         auto f = boost::bind(&mempool_update, miners, boost::ref(s));
         s.schedule(f, tNext);
     }
@@ -85,7 +93,7 @@ int run_simulation(boost::random::mt19937& rng,
 
     // This loops primes the simulation with n_blocks being found at random intervals
     // starting from t=0:
-    double lambda = 60.0;
+    double lambda = 20.0;
     double t = 0.0;
     for (int i = 0; i < n_blocks; i++) {
         int which_miner = dist(rng);
@@ -133,13 +141,13 @@ int main(int argc, char** argv) {
     po::options_description desc("Command-line options");
     desc.add_options()
         ("help", "show options")
-        ("blocks", po::value<int>(&n_blocks)->default_value(500),
+        ("blocks", po::value<int>(&n_blocks)->default_value(100),
                    "number of blocks to simulate")
         ("latency", po::value<double>(&block_latency)->default_value(10.0),
                     "block relay/validate latency (in seconds) to simulate")
         ("runs", po::value<int>(&n_runs)->default_value(1),
                  "number of times to run simulation")
-        ("rng_seed", po::value<int>(&rng_seed)->default_value(73),
+        ("rng_seed", po::value<int>(&rng_seed)->default_value(0),
                      "random number generator seed")
         ("config", po::value<std::string>(&config_file)->default_value("mining.cfg"),
                    "Mining config filename");

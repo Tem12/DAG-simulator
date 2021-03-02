@@ -10,6 +10,7 @@
 #include <set>
 #include <utility>
 #include <map>
+#include <tuple>
 
 #include <iostream>
 #include <string>
@@ -20,6 +21,7 @@
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/random_access_index.hpp>
 
 class Miner;
 class PeerInfo {
@@ -54,7 +56,8 @@ typedef multi_index_container <
   Record,
   indexed_by<
     hashed_unique< member<Record, uint64_t, &Record::id> >,
-    ordered_non_unique< member<Record, int, &Record::fee> >
+    ordered_non_unique< member<Record, int, &Record::fee> >,
+    random_access<>
   >
 > Mempool;
 
@@ -80,7 +83,7 @@ public:
             // for (const auto& [key, value] : depth_map) {
                 // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 500 << " Depth:" << depth << " => " << (double)(500-depth) / 500.0 * 100 << "%\n";
+            std::cout << "Blocks:" << 100 << " Depth:" << depth << " => " << (double)(100-depth) / 100.0 * 100 << "%\n";
         }
     }
 
@@ -103,18 +106,31 @@ public:
         // map_bcst
     }
 
+    void RemoveMP(const int how_many) {
+        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
+        for (auto [it, i] = std::tuple{fee_index.begin(), 0}; i<how_many; it++, i++) {
+            fee_index.erase(it);
+        }
+        // for (auto it=fee_index.rbegin(), int i=0; i<how_many; it++, i++) {
+        //     fee_index.erase(it);
+        // }
+    }
+
     virtual void FindBlock(CScheduler& s, int blockNumber) {
         // Extend the chain:
         // auto chain_copy = std::make_shared<std::vector<int>>(best_chain->begin(),
         //                                                      best_chain->end());
         // chain_copy->push_back(blockNumber);
         // best_chain = chain_copy;
-        reward++;
+        // reward++;
         map_bcst[blockNumber] = true;
         // Transactions in block
         // auto blocks_copy = std::make_shared<std::vector<Block>>(blocks->begin(),
         //                                                         blocks->end());
-        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
+        // Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
+        const auto &rand_index = mem_pool.get<2>();
+        // std::cout << rand_index[0].name << '\n';
+
         Block tmp_block;
         tmp_block.id = blockNumber;
 
@@ -123,6 +139,22 @@ public:
         // depth_map[blockNumber] = depth;
         // Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
 
+
+        std::random_device rd;  // hardware
+        std::mt19937 gen(rd()); // seed the generator
+        // std::uniform_int_distribution<> distr(0, mem_pool.size());
+        for (int i=0; i<100; i++) {
+            std::uniform_int_distribution<> distr(0, mem_pool.size()-1);
+            uint64_t id = rand_index[distr(gen)].id;
+            int     fee = rand_index[distr(gen)].fee;
+            tmp_block.txn.push_back(Record{id,fee});
+            if (this->mID == 0) {
+                tx[id] = true;
+            }
+            auto it = mem_pool.find(id);
+            mem_pool.erase(it);
+        }
+/*
         int i = 0;
         for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
             // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
@@ -131,15 +163,16 @@ public:
                 tx[it->id] = true;
             }
             // id_index.erase(it->id);
-            if (i >= 2224) break; // max 3000 transactions in block
+            if (i >= 99) break; // max 100 transactions in block
             i++;
         }
-
+*/
         if (this->mID == 0) {
             txnum += tmp_block.txn.size();
         }
 
         // delete processed mined transactions in local mempool
+/*
         Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
         for (auto &elem: tmp_block.txn) {
             id_index.erase(elem.id);
@@ -147,6 +180,7 @@ public:
         //         tx[elem.id] = true;
         //     }
         }
+*/
         // blocks_copy->push_back(tmp_block);
         // blocks = blocks_copy;
 
