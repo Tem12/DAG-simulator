@@ -16,7 +16,6 @@ CScheduler::~CScheduler()
 {
 }
 
-
 void CScheduler::serviceQueue()
 {
     while (!taskQueue.empty()) {

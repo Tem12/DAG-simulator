@@ -6,30 +6,33 @@
 
 #include <boost/function.hpp>
 #include <list>
-#include <vector>
-#include <set>
-#include <utility>
 #include <map>
+#include <set>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 #include <iostream>
 #include <string>
 #include <string_view>
 
-#include <boost/multi_index_container.hpp>
 #include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/random_access_index.hpp>
+#include <boost/multi_index_container.hpp>
 
 class Miner;
-class PeerInfo {
-public:
-    PeerInfo(Miner* _peer, int _chain_tip, double _latency) :
-        peer(_peer), chain_tip(_chain_tip), latency(_latency) { }
+class PeerInfo
+{
+  public:
+    PeerInfo(Miner *_peer, int _chain_tip, double _latency)
+        : peer(_peer), chain_tip(_chain_tip), latency(_latency)
+    {
+    }
 
-    Miner* peer;
+    Miner *peer;
     int chain_tip;
     double latency;
 };
@@ -37,13 +40,21 @@ public:
 using namespace boost::multi_index;
 
 struct Record {
-  uint64_t id;
-  int      fee;
+    uint64_t id;
+    int fee;
 
-  Record(uint64_t id, int fee):id(id),fee(fee){}
+    Record(uint64_t id, int fee) : id(id), fee(fee)
+    {
+    }
 
-  bool operator<  (const Record& a) const{return fee<a.fee;}
-  bool operator== (const Record& a) const{return id==a.id;}
+    bool operator<(const Record &a) const
+    {
+        return fee < a.fee;
+    }
+    bool operator==(const Record &a) const
+    {
+        return id == a.id;
+    }
 };
 
 struct Block {
@@ -52,17 +63,15 @@ struct Block {
     std::vector<Record> txn;
 };
 
-typedef multi_index_container <
-  Record,
-  indexed_by<
-    hashed_unique< member<Record, uint64_t, &Record::id> >,
-    ordered_non_unique< member<Record, int, &Record::fee> >,
-    random_access<>
-  >
-> Mempool;
+typedef multi_index_container<
+    Record, indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
+                       ordered_non_unique<member<Record, int, &Record::fee>>,
+                       random_access<>>>
+    Mempool;
 
-class Miner {
-public:
+class Miner
+{
+  public:
     // public
     const int mID;
     std::shared_ptr<std::vector<Block>> blocks;
@@ -76,56 +85,74 @@ public:
     int depth;
     // std::map<int, int> depth_map;
 
-    void PrintStats() {
-        if(this->mID == 0) {
-            std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size() << " => "
-                << std::setprecision(3) << 100-(((double)tx.size()/(double)txnum)*100) << "%\n";
+    void PrintStats()
+    {
+        if (this->mID == 0) {
+            std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size()
+                      << " => " << std::setprecision(3)
+                      << 100 - (((double)tx.size() / (double)txnum) * 100)
+                      << "%\n";
             // for (const auto& [key, value] : depth_map) {
-                // std::cout << "[" << key << ":" << value << "]";
+            // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 100 << " Depth:" << depth << " => " << (double)(100-depth) / 100.0 * 100 << "%\n";
+            std::cout << "Blocks:" << 100 << " Depth:" << depth << " => "
+                      << (double)(100 - depth) / 100.0 * 100 << "%\n";
         }
     }
 
     // Return a random double in the range passed.
     typedef boost::function<double(double, double)> JitterFunction;
 
-    Miner(double _hash_fraction, double _block_latency, JitterFunction _func) :
-        hash_fraction(_hash_fraction), block_latency(_block_latency), jitter_func(_func), mID(nextID++) {
+    Miner(double _hash_fraction, double _block_latency, JitterFunction _func)
+        : hash_fraction(_hash_fraction), block_latency(_block_latency),
+          jitter_func(_func), mID(nextID++)
+    {
         // best_chain = std::make_shared<std::vector<int>>();
         blocks = std::make_shared<std::vector<Block>>();
         reward = 0;
-        balance= 0;
-        txnum  = 0;
-        depth  = 0;
+        balance = 0;
+        txnum = 0;
+        depth = 0;
     }
 
-    void AddPeer(Miner* peer, double latency) {
+    void AddPeer(Miner *peer, double latency)
+    {
         peers.push_back(PeerInfo(peer, -1, latency));
         // adjTable[(peer->mID)] = std::map<int, bool>{};
         // map_bcst
     }
 
-    void RemoveMP(const int how_many) {
+    void RemoveMP(const int size)
+    {
         Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
-        for (auto [it, i] = std::tuple{fee_index.begin(), 0}; i<how_many; it++, i++) {
-            fee_index.erase(it);
-        }
+        auto a = fee_index.begin();
+        auto b = fee_index.begin();
+        for (int i = 0; i < size; i++)
+            b++;
+        fee_index.erase(a, b);
+
+        // for (auto [it, i] = std::tuple{fee_index.begin(), 0}; i<how_many;
+        // it++, i++) {
+        //     fee_index.erase(it);
+        // }
         // for (auto it=fee_index.rbegin(), int i=0; i<how_many; it++, i++) {
         //     fee_index.erase(it);
         // }
     }
 
-    virtual void FindBlock(CScheduler& s, int blockNumber) {
+    virtual void FindBlock(CScheduler &s, int blockNumber)
+    {
         // Extend the chain:
-        // auto chain_copy = std::make_shared<std::vector<int>>(best_chain->begin(),
+        // auto chain_copy =
+        // std::make_shared<std::vector<int>>(best_chain->begin(),
         //                                                      best_chain->end());
         // chain_copy->push_back(blockNumber);
         // best_chain = chain_copy;
         // reward++;
         map_bcst[blockNumber] = true;
         // Transactions in block
-        // auto blocks_copy = std::make_shared<std::vector<Block>>(blocks->begin(),
+        // auto blocks_copy =
+        // std::make_shared<std::vector<Block>>(blocks->begin(),
         //                                                         blocks->end());
         // Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
         const auto &rand_index = mem_pool.get<2>();
@@ -139,113 +166,121 @@ public:
         // depth_map[blockNumber] = depth;
         // Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
 
-
-        std::random_device rd;  // hardware
+        std::random_device rd; // hardware
         std::mt19937 gen(rd()); // seed the generator
         // std::uniform_int_distribution<> distr(0, mem_pool.size());
-        for (int i=0; i<100; i++) {
-            std::uniform_int_distribution<> distr(0, mem_pool.size()-1);
+        for (int i = 0; i < 100; i++) {
+            std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
             uint64_t id = rand_index[distr(gen)].id;
-            int     fee = rand_index[distr(gen)].fee;
-            tmp_block.txn.push_back(Record{id,fee});
+            int fee = rand_index[distr(gen)].fee;
+            tmp_block.txn.push_back(Record{ id, fee });
             if (this->mID == 0) {
                 tx[id] = true;
             }
             auto it = mem_pool.find(id);
             mem_pool.erase(it);
         }
-/*
-        int i = 0;
-        for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
-            // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
-            tmp_block.txn.push_back(Record{it->id, it->fee});
-            if (this->mID == 0) {
-                tx[it->id] = true;
-            }
-            // id_index.erase(it->id);
-            if (i >= 99) break; // max 100 transactions in block
-            i++;
-        }
-*/
+        /*
+                int i = 0;
+                for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++)
+           {
+                    // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
+                    tmp_block.txn.push_back(Record{it->id, it->fee});
+                    if (this->mID == 0) {
+                        tx[it->id] = true;
+                    }
+                    // id_index.erase(it->id);
+                    if (i >= 99) break; // max 100 transactions in block
+                    i++;
+                }
+        */
         if (this->mID == 0) {
             txnum += tmp_block.txn.size();
         }
 
         // delete processed mined transactions in local mempool
-/*
-        Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
-        for (auto &elem: tmp_block.txn) {
-            id_index.erase(elem.id);
-        //     if (this->mID == 0) {
-        //         tx[elem.id] = true;
-        //     }
-        }
-*/
+        /*
+                Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+                for (auto &elem: tmp_block.txn) {
+                    id_index.erase(elem.id);
+                //     if (this->mID == 0) {
+                //         tx[elem.id] = true;
+                //     }
+                }
+        */
         // blocks_copy->push_back(tmp_block);
         // blocks = blocks_copy;
 
 #ifdef TRACE
-        // std::cout << "Miner " << hash_fraction << " found block at simulation time "
+        // std::cout << "Miner " << hash_fraction << " found block at simulation
+        // time "
         //           << s.getSimTime() << "\n";
 #endif
         // RelayChain(this, s, blocks_copy, tmp_block, block_latency);
         RelayChain(this, s, tmp_block, block_latency);
     }
 
-    virtual void ConsiderChain(Miner* from, CScheduler& s,
-                            //    std::shared_ptr<std::vector<int>> chain,
-                            //    std::shared_ptr<std::vector<Block>> blcks,
-                               Block& b, double latency) {
+    virtual void ConsiderChain(Miner *from, CScheduler &s,
+                               //    std::shared_ptr<std::vector<int>> chain,
+                               //    std::shared_ptr<std::vector<Block>> blcks,
+                               Block &b, double latency)
+    {
         // if (blcks->size() > blocks->size()) {
 #ifdef TRACE
-            // std::cout << "Miner " << hash_fraction
-            //           << " relaying chain at simulation time " << s.getSimTime() << "\n";
+        // std::cout << "Miner " << hash_fraction
+        //           << " relaying chain at simulation time " << s.getSimTime()
+        //           <<
+        //           "\n";
 #endif
-            // best_chain = chain;
-            // blocks = blcks;
-            // TODO change local mempool
-            if (b.depth > depth) {
-                depth = b.depth;
-            }
-            // depth_map[b.id] = b.depth;
+        // best_chain = chain;
+        // blocks = blcks;
+        // TODO change local mempool
+        if (b.depth > depth) {
+            depth = b.depth;
+        }
+        // depth_map[b.id] = b.depth;
 
-            if (map_bcst.find(b.id) == map_bcst.end()) { // not found
-                map_bcst[b.id] = true;
-                // update local mempool
+        if (map_bcst.find(b.id) == map_bcst.end()) { // not found
+            map_bcst[b.id] = true;
+            // update local mempool
+            if (this->mID == 0) {
+                txnum += b.txn.size();
+            }
+            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+            for (auto &elem : b.txn) {
+                id_index.erase(elem.id);
                 if (this->mID == 0) {
-                    txnum += b.txn.size();
+                    tx[elem.id] = true;
                 }
-                Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
-                for (auto &elem: b.txn) {
-                    id_index.erase(elem.id);
-                    if (this->mID == 0) {
-                        tx[elem.id] = true;
-                    }
-                }
-                RelayChain(this, s, b, latency);
-            } // else -> found
-            // RelayChain(from, s, blcks, b, latency);
-            // RelayChain(this, s, b, latency);
-        // }
+            }
+            RelayChain(this, s, b, latency);
+        } // else -> found
+          // RelayChain(from, s, blcks, b, latency);
+          // RelayChain(this, s, b, latency);
+          // }
     }
 
-    virtual void RelayChain(Miner* from, CScheduler& s,
+    virtual void RelayChain(Miner *from, CScheduler &s,
                             // std::shared_ptr<std::vector<int>> chain,
                             // std::shared_ptr<std::vector<Block>> blcks,
-                            Block& b, double latency) {
-        for (auto&& peer : peers) {
-            // if (peer.chain_tip == chain->back()) continue; // Already relayed to this peer
-            // peer.chain_tip = chain->back();
-            if (peer.peer == from) continue; // don't relay to peer that just sent it!
+                            Block &b, double latency)
+    {
+        for (auto &&peer : peers) {
+            // if (peer.chain_tip == chain->back()) continue; // Already relayed
+            // to this peer peer.chain_tip = chain->back();
+            if (peer.peer == from)
+                continue; // don't relay to peer that just sent it!
 
             double jitter = 0;
-            if (peer.latency > 0) jitter =
-                jitter_func(-peer.latency/1000., peer.latency/1000.);
+            if (peer.latency > 0)
+                jitter =
+                    jitter_func(-peer.latency / 1000., peer.latency / 1000.);
             double tPeer = s.getSimTime() + peer.latency + jitter + latency;
-            // auto f = boost::bind(&Miner::ConsiderChain, peer.peer, from, boost::ref(s),
+            // auto f = boost::bind(&Miner::ConsiderChain, peer.peer, from,
+            // boost::ref(s),
             //                      blcks, b, block_latency);
-            auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this, boost::ref(s),
-                                 b, block_latency);
+            auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this,
+                                 boost::ref(s), b, block_latency);
             s.schedule(f, tPeer);
         }
     }
@@ -254,12 +289,16 @@ public:
     //     best_chain->clear();
     // }
 
-    const double GetHashFraction() const { return hash_fraction; }
+    const double GetHashFraction() const
+    {
+        return hash_fraction;
+    }
     // std::vector<int> GetBestChain() const { return *best_chain; }
 
-protected:
+  protected:
     double hash_fraction; // This miner has hash_fraction of hash rate
-    // This miner produces blocks that take block_latency seconds to relay/validate
+    // This miner produces blocks that take block_latency seconds to
+    // relay/validate
     double block_latency;
     JitterFunction jitter_func;
 

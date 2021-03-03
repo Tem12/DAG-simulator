@@ -100,3 +100,7 @@ Blocks:500 Depth:355 => 29%
 [seed73 λ60 ~]
 Stats t_all:877937 t_dup:653221 => 25.6%
 Blocks:500 Depth:368 => 26.4%
+
+clang-format -i xxx.cpp
+valgrind --tool=callgrind ./mining_simulator
+kcachegrind

@@ -15,7 +15,7 @@
 
 class CScheduler
 {
-public:
+  public:
     CScheduler();
     ~CScheduler();
 
@@ -26,9 +26,12 @@ public:
 
     void serviceQueue();
 
-    double getSimTime() { return simTime; }
+    double getSimTime()
+    {
+        return simTime;
+    }
 
-private:
+  private:
     std::multimap<double, Function> taskQueue;
     double simTime;
 };
