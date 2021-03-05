@@ -15,6 +15,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <fstream>
 
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -88,6 +89,9 @@ class Miner
     void PrintStats()
     {
         if (this->mID == 0) {
+            int total = 0;
+            std::vector<int> em = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
             std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size()
                       << " => " << std::setprecision(3)
                       << 100 - (((double)tx.size() / (double)txnum) * 100)
@@ -95,8 +99,50 @@ class Miner
             // for (const auto& [key, value] : depth_map) {
             // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 100 << " Depth:" << depth << " => "
-                      << (double)(100 - depth) / 100.0 * 100 << "%\n";
+            std::cout << "Blocks:" << 1500 << " Depth:" << depth << " => "
+                      << std::setprecision(3)
+                      << (double)(1500 - depth) / 1500.0 * 100 << "%\n";
+
+            std::ofstream myfile;
+            myfile.open("example.txt");
+            // std::cout << abc.size() << "\n";
+            // int i = 0;
+            for (auto const &[key, val] : abc) {
+                // myfile << i++ << "\n";
+                total += val.first;
+                if (val.second.size() > 1) {
+                    myfile << key << " - [" << val.first << "] ";
+                    for (auto it = val.second.begin(); it != val.second.end();
+                         ++it) {
+                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
+                               << ' ';
+                        int t = std::get<1>(*it);
+                        em[t] += val.first / val.second.size();
+                    }
+                    myfile << '\n';
+                } else {
+                    int t = std::get<1>(*val.second.data());
+                    em[t] += val.first;
+                }
+            }
+
+            std::cout << "[";
+            for (int e : em) {
+                std::cout << std::setprecision(3)
+                          << ((double)e / (double)total * 100.0) << "% ";
+            }
+            std::cout << "]" << std::endl;
+            // std::cout << total;
+            // for (auto it = abc.begin(); it != abc.end(); ++it) {
+            //     myfile << it->first << "- ";
+            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
+            //     ++it2) {
+            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
+            //         << ' ';
+            //     }
+            //     myfile << '\n';
+            // }
+            myfile.close();
         }
     }
 
@@ -127,6 +173,7 @@ class Miner
         Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
         auto a = fee_index.begin();
         auto b = fee_index.begin();
+        // b = b + size;
         for (int i = 0; i < size; i++)
             b++;
         fee_index.erase(a, b);
@@ -140,7 +187,8 @@ class Miner
         // }
     }
 
-    virtual void FindBlock(CScheduler &s, int blockNumber)
+    virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s,
+                           int blockNumber)
     {
         // Extend the chain:
         // auto chain_copy =
@@ -148,13 +196,13 @@ class Miner
         //                                                      best_chain->end());
         // chain_copy->push_back(blockNumber);
         // best_chain = chain_copy;
-        // reward++;
+        balance++;
         map_bcst[blockNumber] = true;
         // Transactions in block
         // auto blocks_copy =
         // std::make_shared<std::vector<Block>>(blocks->begin(),
         //                                                         blocks->end());
-        // Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
+        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
         const auto &rand_index = mem_pool.get<2>();
         // std::cout << rand_index[0].name << '\n';
 
@@ -166,48 +214,59 @@ class Miner
         // depth_map[blockNumber] = depth;
         // Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
 
-        std::random_device rd; // hardware
-        std::mt19937 gen(rd()); // seed the generator
+        // std::random_device rd; // hardware
+        // std::mt19937 gen(rd()); // seed the generator
         // std::uniform_int_distribution<> distr(0, mem_pool.size());
-        for (int i = 0; i < 100; i++) {
-            std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
-            uint64_t id = rand_index[distr(gen)].id;
-            int fee = rand_index[distr(gen)].fee;
-            tmp_block.txn.push_back(Record{ id, fee });
-            if (this->mID == 0) {
-                tx[id] = true;
-            }
-            auto it = mem_pool.find(id);
-            mem_pool.erase(it);
-        }
-        /*
-                int i = 0;
-                for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++)
-           {
-                    // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
-                    tmp_block.txn.push_back(Record{it->id, it->fee});
-                    if (this->mID == 0) {
-                        tx[it->id] = true;
-                    }
-                    // id_index.erase(it->id);
-                    if (i >= 99) break; // max 100 transactions in block
-                    i++;
+        if (this->mID != 0) {
+            for (int i = 0; i < 100; i++) {
+                std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
+                uint64_t id = rand_index[distr(rng)].id;
+                int fee = rand_index[distr(rng)].fee;
+                tmp_block.txn.push_back(Record{ id, fee });
+                abc[id].first = fee;
+                abc[id].second.push_back(std::tuple<int, int>(depth, mID));
+                if (this->mID == 0) {
+                    tx[id] = true;
                 }
-        */
-        if (this->mID == 0) {
-            txnum += tmp_block.txn.size();
+                auto it = mem_pool.find(id);
+                mem_pool.erase(it);
+            }
         }
 
-        // delete processed mined transactions in local mempool
-        /*
-                Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
-                for (auto &elem: tmp_block.txn) {
-                    id_index.erase(elem.id);
+        // if (this->mID == 0) {
+        //     txnum += tmp_block.txn.size();
+        // }
+
+        if (this->mID == 0) {
+            int i = 0;
+            for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
+                // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
+                tmp_block.txn.push_back(Record{ it->id, it->fee });
+                abc[it->id].first = it->fee;
+                abc[it->id].second.push_back(std::tuple<int, int>(depth, mID));
+                if (this->mID == 0) {
+                    tx[it->id] = true;
+                }
+                // id_index.erase(it->id);
+                if (i >= 99)
+                    break; // max 100 transactions in block
+                i++;
+            }
+
+            // if (this->mID == 0) {
+            txnum += tmp_block.txn.size();
+            // }
+
+            // delete processed mined transactions in local mempool
+            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+            for (auto &elem : tmp_block.txn) {
+                id_index.erase(elem.id);
                 //     if (this->mID == 0) {
                 //         tx[elem.id] = true;
                 //     }
-                }
-        */
+            }
+        }
+
         // blocks_copy->push_back(tmp_block);
         // blocks = blocks_copy;
 
@@ -310,8 +369,11 @@ class Miner
     // std::map<int, std::map<int, bool>> adjTable;
     std::map<int, bool> map_bcst;
     static int nextID;
+    static std::map<uint64_t, std::pair<int, std::vector<std::tuple<int, int>>>>
+        abc;
 };
 
 int Miner::nextID = 0;
+std::map<uint64_t, std::pair<int, std::vector<std::tuple<int, int>>>> Miner::abc;
 
 #endif /* STANDARD_MINER_H */
