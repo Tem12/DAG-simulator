@@ -43,14 +43,19 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
 {
     // std::random_device rd; // obtain a random number from hardware
     // std::mt19937 gen(rd()); // seed the generator
-    std::uniform_int_distribution<> distr(90, 110); // define the range
+    // std::uniform_int_distribution<> distr(90, 110); // define the range
+    boost::random::variate_generator<boost::random::mt19937 &,
+                                     boost::random::exponential_distribution<>>
+        fee_gen(rng, boost::random::exponential_distribution<>(1.0));
 
+    double lambda = 100.0;
     // gen 1000 txs at the beginning of simulation to everybody's mempool
     if (txID < 1) {
         for (int i = 0; i < 1000; i++) {
-            int in = distr(rng);
+            auto in = fee_gen() * lambda;
+            // int in = distr(rng);
             for (auto miner : miners)
-                miner->mem_pool.insert(Record{ txID, in });
+                miner->mem_pool.insert(Record{ txID, (int)in });
             txID++;
         }
     }
@@ -59,12 +64,13 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
     int txsz = 65;
     // gen 65 transactions
     for (int i = 0; i < txsz; i++) {
-        int in = distr(rng);
+        // int in = distr(rng);
+        auto in = fee_gen() * lambda;
         for (auto miner : miners) {
             if (miner->mem_pool.size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            miner->mem_pool.insert(Record{ txID, in });
+            miner->mem_pool.insert(Record{ txID, (int)in });
         }
         txID++;
     }
@@ -98,7 +104,7 @@ int run_simulation(boost::random::mt19937 &rng, int n_blocks,
 
     // This loops primes the simulation with n_blocks being found at random
     // intervals starting from t=0:
-    double lambda = 100.0;
+    double lambda = 60.0;
     double t = 0.0;
     for (int i = 0; i < n_blocks; i++) {
         int which_miner = dist(rng);

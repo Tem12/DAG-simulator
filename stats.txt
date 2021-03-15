@@ -104,3 +104,19 @@ Blocks:500 Depth:368 => 26.4%
 clang-format -i xxx.cpp
 valgrind --tool=callgrind ./mining_simulator
 kcachegrind
+
+lambda 100
+1500 blocks, latency 5secs, 10 miners connected in a ring
+t_all:150000 t_dup:148813 => 0.791%
+blocks:1500 Depth:1346 => 10.3%
+[20.5% 10.2% 8.48% 8.96% 8.24% 8.78% 8.96% 8.43% 9.52% 7.9%]
+
+1500 blocks, latency 5secs, 10 miners connected in a ring
+t_all:150000 t_dup:149185 => 0.543%
+blocks:1500 Depth:1346 => 10.3%
+[28.9% 9.1% 7.59% 8.02% 7.35% 7.9% 8.05% 7.53% 8.47% 7.05%]
+[20 8.888 8.888 8.888 8.888 8.888 8.888 8.888 8.888 8.888]
+
+1.025
+1.45
+1.51
