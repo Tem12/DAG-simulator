@@ -25,6 +25,11 @@
 
 #include "standard_miner.hpp"
 
+// FIXME : temp added to extern globally
+std::string config_file;
+time_t sim_start_time;
+int n_blocks = 2016;
+
 static void Connect(Miner *m1, Miner *m2, double latency)
 {
     m1->AddPeer(m2, latency);
@@ -48,7 +53,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
                                      boost::random::exponential_distribution<>>
         fee_gen(rng, boost::random::exponential_distribution<>(1.0));
 
-    double lambda = 100.0;
+    double lambda = 150.0;
     // gen 1000 txs at the beginning of simulation to everybody's mempool
     if (txID < 1) {
         for (int i = 0; i < 1000; i++) {
@@ -79,7 +84,9 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
     double tNext = s.getSimTime() + 3;
     // n_blocks * 10 min mean time * 60 seconds
     // if (tNext < 100*600) {
-    if (tNext < 120 * 1500) {
+    // TODO : this must be edited automatically in code, if set to an extreme
+    // high, simulation will last much longer
+    if (tNext < 120 * 10000) {
         auto f = boost::bind(&mempool_update, rng, miners, boost::ref(s));
         s.schedule(f, tNext);
     }
@@ -104,7 +111,7 @@ int run_simulation(boost::random::mt19937 &rng, int n_blocks,
 
     // This loops primes the simulation with n_blocks being found at random
     // intervals starting from t=0:
-    double lambda = 60.0;
+    double lambda = 20.0;
     double t = 0.0;
     for (int i = 0; i < n_blocks; i++) {
         int which_miner = dist(rng);
@@ -121,6 +128,9 @@ int run_simulation(boost::random::mt19937 &rng, int n_blocks,
     }
 
     mempool_update(rng, miners, simulator);
+
+    // Simulation started
+    sim_start_time = time(nullptr);
 
     simulator.serviceQueue();
 
@@ -144,21 +154,23 @@ int main(int argc, char **argv)
 {
     namespace po = boost::program_options;
 
-    int n_blocks = 2016;
     double block_latency = 1.0;
     int n_runs = 1;
     int rng_seed = 0;
-    std::string config_file;
+
+    // FIXME : temp edited
+    // std::string config_file;
 
     po::options_description desc("Command-line options");
     desc.add_options()("help", "show options")(
-        "blocks", po::value<int>(&n_blocks)->default_value(1500),
+        "blocks", po::value<int>(&n_blocks)->default_value(10000),
         "number of blocks to simulate")(
         "latency", po::value<double>(&block_latency)->default_value(5.0),
         "block relay/validate latency (in seconds) to simulate")(
         "runs", po::value<int>(&n_runs)->default_value(1),
         "number of times to run simulation")(
-        "rng_seed", po::value<int>(&rng_seed)->default_value(23),
+        "rng_seed", po::value<int>(&rng_seed)->default_value(4544),
+        // "rng_seed", po::value<int>(&rng_seed)->default_value(21242),
         "random number generator seed")(
         "config",
         po::value<std::string>(&config_file)->default_value("mining.cfg"),
@@ -280,6 +292,10 @@ int main(int argc, char **argv)
     //     std::cout << " " << fraction*100;
     // }
     // std::cout << "\n";
+
+    printf("Simulation duration: ");
+    auto time_diff = (time_t)difftime(time(nullptr), sim_start_time);
+    print_diff_time(time_diff);
 
     return 0;
 }

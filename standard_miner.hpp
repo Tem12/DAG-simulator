@@ -24,6 +24,8 @@
 #include <boost/multi_index/random_access_index.hpp>
 #include <boost/multi_index_container.hpp>
 
+#include "est_time.h"
+
 class Miner;
 class PeerInfo
 {
@@ -39,6 +41,15 @@ class PeerInfo
 };
 
 using namespace boost::multi_index;
+
+// FIXME : temp added to extern globally
+extern std::string config_file;
+extern time_t sim_start_time;
+extern int n_blocks;
+
+// FIXME : temp variable
+int progress = 0; // progress in percent
+time_t last_progress_time = 0; // last progress print time
 
 struct Record {
     uint64_t id;
@@ -89,6 +100,7 @@ class Miner
     void PrintStats()
     {
         if (this->mID == 0) {
+            int fluke = 0;
             int total = 0;
             std::vector<int> em = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -99,25 +111,33 @@ class Miner
             // for (const auto& [key, value] : depth_map) {
             // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 1500 << " Depth:" << depth << " => "
+            std::cout << "Blocks:" << 10000 << " Depth:" << depth << " => "
                       << std::setprecision(3)
-                      << (double)(1500 - depth) / 1500.0 * 100 << "%\n";
+                      << (double)(10000 - depth) / 10000.0 * 100 << "%\n";
 
             std::ofstream myfile;
-            myfile.open("example.txt");
+            myfile.open(config_file.append(".details.txt"));
+
             // std::cout << abc.size() << "\n";
             // int i = 0;
             for (auto const &[key, val] : abc) {
                 // myfile << i++ << "\n";
                 total += val.first;
                 if (val.second.size() > 1) {
+                    if (val.second.size() > 3)
+                        fluke++;
                     myfile << key << " - [" << val.first << "] ";
                     for (auto it = val.second.begin(); it != val.second.end();
                          ++it) {
                         myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
                                << ' ';
                         int t = std::get<1>(*it);
-                        em[t] += val.first / val.second.size();
+                        // payoff function
+                        /* split evenly distributed */
+                        // em[t] += val.first / val.second.size();
+                        /* only first come first serve */
+                        em[t] += val.first;
+                        break;
                     }
                     myfile << '\n';
                 } else {
@@ -132,6 +152,8 @@ class Miner
                           << ((double)e / (double)total * 100.0) << "% ";
             }
             std::cout << "]" << std::endl;
+
+            std::cout << "fluke count " << fluke << std::endl;
             // std::cout << total;
             // for (auto it = abc.begin(); it != abc.end(); ++it) {
             //     myfile << it->first << "- ";
@@ -217,7 +239,12 @@ class Miner
         // std::random_device rd; // hardware
         // std::mt19937 gen(rd()); // seed the generator
         // std::uniform_int_distribution<> distr(0, mem_pool.size());
-        if (this->mID != 0) {
+
+        // Honest miners
+        //        if ((this->mID != 0) && (this->mID != 1) && (this->mID != 2)
+        //        && (this->mID != 3) && (this->mID != 4) && (this->mID != 6) &&
+        //        (this->mID != 7) && (this->mID != 8) && (this->mID != 9)) {
+        if (this->mID > 0) {
             for (int i = 0; i < 100; i++) {
                 std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
                 uint64_t id = rand_index[distr(rng)].id;
@@ -231,13 +258,21 @@ class Miner
                 auto it = mem_pool.find(id);
                 mem_pool.erase(it);
             }
+            if (this->mID == 0) {
+                txnum += tmp_block.txn.size();
+            }
         }
 
         // if (this->mID == 0) {
         //     txnum += tmp_block.txn.size();
         // }
 
-        if (this->mID == 0) {
+        // Malicious miners
+
+        //        if ((this->mID == 0) || (this->mID == 1) || (this->mID == 2)
+        //        || (this->mID == 3) || (this->mID == 4) || (this->mID == 6) ||
+        //        (this->mID == 7) || (this->mID == 8) || (this->mID == 9)) {
+        if (this->mID <= 0) {
             int i = 0;
             for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
                 // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
@@ -253,9 +288,9 @@ class Miner
                 i++;
             }
 
-            // if (this->mID == 0) {
-            txnum += tmp_block.txn.size();
-            // }
+            if (this->mID == 0) {
+                txnum += tmp_block.txn.size();
+            }
 
             // delete processed mined transactions in local mempool
             Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
@@ -338,9 +373,24 @@ class Miner
             // auto f = boost::bind(&Miner::ConsiderChain, peer.peer, from,
             // boost::ref(s),
             //                      blcks, b, block_latency);
+
             auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this,
                                  boost::ref(s), b, block_latency);
             s.schedule(f, tPeer);
+        }
+        if (from->mID == 0 && b.id * 100 / n_blocks > progress) {
+            progress++;
+
+            if (progress == 1) {
+                last_progress_time = sim_start_time;
+            }
+
+            time_t curr_time = time(nullptr);
+            printf("%d%%\tBlock %d\t",progress, b.id);
+            auto time_diff = (time_t) (difftime(curr_time, last_progress_time)) * (100 - progress);
+            print_diff_time(time_diff);
+
+            last_progress_time = curr_time;
         }
     }
 
