@@ -201,12 +201,14 @@ int main(int argc, char **argv)
     boost::random::mt19937 rng;
     rng.seed(rng_seed);
 
+    // Validate config file
     std::vector<Miner *> miners;
-    if (!vm.count("miner")) {
+    if (vm.count("miner") == 0) {
         std::cout << "You must configure one or more miner in " << config_file
                   << "\n";
         return 1;
     }
+
     for (auto m : vm["miner"].as<std::vector<std::string>>()) {
         std::vector<std::string> v;
         boost::split(v, m, boost::is_any_of(" \t,"));
@@ -219,9 +221,13 @@ int main(int argc, char **argv)
         if (v.size() > 2) {
             latency = atof(v[2].c_str());
         }
-        if (v[1] == "standard") {
+        if (v[1] == "honest") {
             miners.push_back(
-                new Miner(hashpower, latency,
+                new Miner(hashpower, latency, HONEST,
+                          boost::bind(random_real, boost::ref(rng), _1, _2)));
+        } else if (v[1] == "malicious") {
+            miners.push_back(
+                new Miner(hashpower, latency, MALICIOUS,
                           boost::bind(random_real, boost::ref(rng), _1, _2)));
         } else {
             std::cout << "Couldn't parse miner description: " << m << "\n";

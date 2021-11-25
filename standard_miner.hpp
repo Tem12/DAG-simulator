@@ -81,6 +81,8 @@ typedef multi_index_container<
                        random_access<>>>
     Mempool;
 
+enum miner_type { HONEST, MALICIOUS };
+
 class Miner
 {
   public:
@@ -88,6 +90,7 @@ class Miner
     const int mID;
     std::shared_ptr<std::vector<Block>> blocks;
     Mempool mem_pool;
+    miner_type type; // Miner can either honest or malicious
     u_int64_t reward;
     u_int64_t balance;
 
@@ -171,8 +174,8 @@ class Miner
     // Return a random double in the range passed.
     typedef boost::function<double(double, double)> JitterFunction;
 
-    Miner(double _hash_fraction, double _block_latency, JitterFunction _func)
-        : hash_fraction(_hash_fraction), block_latency(_block_latency),
+    Miner(double _hash_fraction, double _block_latency, miner_type _type, JitterFunction _func)
+        : hash_fraction(_hash_fraction), type(_type), block_latency(_block_latency),
           jitter_func(_func), mID(nextID++)
     {
         // best_chain = std::make_shared<std::vector<int>>();
@@ -241,10 +244,7 @@ class Miner
         // std::uniform_int_distribution<> distr(0, mem_pool.size());
 
         // Honest miners
-        //        if ((this->mID != 0) && (this->mID != 1) && (this->mID != 2)
-        //        && (this->mID != 3) && (this->mID != 4) && (this->mID != 6) &&
-        //        (this->mID != 7) && (this->mID != 8) && (this->mID != 9)) {
-        if (this->mID > 0) {
+        if (this->type == HONEST) {
             for (int i = 0; i < 100; i++) {
                 std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
                 uint64_t id = rand_index[distr(rng)].id;
@@ -261,18 +261,12 @@ class Miner
             if (this->mID == 0) {
                 txnum += tmp_block.txn.size();
             }
-        }
 
-        // if (this->mID == 0) {
-        //     txnum += tmp_block.txn.size();
-        // }
-
-        // Malicious miners
-
-        //        if ((this->mID == 0) || (this->mID == 1) || (this->mID == 2)
-        //        || (this->mID == 3) || (this->mID == 4) || (this->mID == 6) ||
-        //        (this->mID == 7) || (this->mID == 8) || (this->mID == 9)) {
-        if (this->mID <= 0) {
+            // if (this->mID == 0) {
+            //     txnum += tmp_block.txn.size();
+            // }
+        } else if (this->type == MALICIOUS) {
+            // Malicious miners
             int i = 0;
             for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
                 // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
@@ -300,10 +294,10 @@ class Miner
                 //         tx[elem.id] = true;
                 //     }
             }
-        }
 
-        // blocks_copy->push_back(tmp_block);
-        // blocks = blocks_copy;
+            // blocks_copy->push_back(tmp_block);
+            // blocks = blocks_copy;
+        }
 
 #ifdef TRACE
         // std::cout << "Miner " << hash_fraction << " found block at simulation
@@ -386,8 +380,9 @@ class Miner
             }
 
             time_t curr_time = time(nullptr);
-            printf("%d%%\tBlock %d\t",progress, b.id);
-            auto time_diff = (time_t) (difftime(curr_time, last_progress_time)) * (100 - progress);
+            printf("%d%%\tBlock %d\t", progress, b.id);
+            auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) *
+                             (100 - progress);
             print_diff_time(time_diff);
 
             last_progress_time = curr_time;
