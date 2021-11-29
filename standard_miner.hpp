@@ -27,6 +27,7 @@
 #include <boost/multi_index_container.hpp>
 
 #include "est_time.h"
+#include "RandomAccessMap.h"
 
 class Miner;
 class PeerInfo
@@ -78,7 +79,7 @@ struct Block {
 };
 
 // uint_64 id, uint_32 fee
-typedef std::unordered_map<uint64_t, uint32_t> Mempool;
+typedef std::map<uint64_t, uint32_t> Mempool;
 
 enum miner_type { HONEST, MALICIOUS };
 
@@ -263,8 +264,6 @@ class Miner
             for (int i = 0; i < blockSize; i++) {
                 std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
                 int rand_index = distr(rng);
-                auto it = mem_pool.begin();
-                std::advance(it, rand_index);
 
 //                for (auto& it : mem_pool) {
 //                    std::cout << it.first << ' '
@@ -278,8 +277,9 @@ class Miner
 //                uint64_t id = (mem_pool.find(rand_index))->first;
 //                uint32_t fee = (mem_pool.find(rand_index))->second;
 
-                uint64_t id = it->first;
-                uint32_t fee = it->second;
+                auto mem_pool_tx = mem_pool.find(rand_index);
+                uint64_t id = mem_pool_tx->first;
+                uint32_t fee = mem_pool_tx->second;
 
                 tmp_block.txn.push_back(Record{ id, fee });
                 abc[id].first = fee;
@@ -290,7 +290,7 @@ class Miner
                 }
 
 //                auto it = mem_pool.find(id);
-                mem_pool.erase(it);
+                mem_pool.erase(rand_index);
             }
             if (this->mID == 0) {
                 txnum += tmp_block.txn.size();

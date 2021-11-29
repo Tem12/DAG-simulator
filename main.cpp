@@ -25,6 +25,8 @@
 
 #include "standard_miner.hpp"
 
+#define TOTAL_HASHPOWER_EPS 0.000001 // max deviation of valid hashpower
+
 // FIXME : temp added to extern globally
 std::string config_file;
 time_t sim_start_time;
@@ -74,7 +76,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
             auto in = fee_gen() * lambda;
             // int in = distr(rng);
             for (auto miner : miners) {
-                miner->mem_pool.insert({ txID, (uint32_t)in });
+                miner->mem_pool.insert({txID, (uint32_t)in});
             }
             txID++;
         }
@@ -112,7 +114,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
             if (miner->mem_pool.size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            miner->mem_pool.insert({ txID, (uint32_t)in });
+            miner->mem_pool.insert({txID, (uint32_t)in});
         }
         txID++;
     }
@@ -267,6 +269,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    double totalHashpower = 0.0;
+
     for (auto m : vm["miner"].as<std::vector<std::string>>()) {
         std::vector<std::string> v;
         boost::split(v, m, boost::is_any_of(" \t,"));
@@ -275,6 +279,7 @@ int main(int argc, char **argv)
             continue;
         }
         double hashpower = atof(v[0].c_str());
+        totalHashpower += hashpower;
         double latency = block_latency;
         if (v.size() > 2) {
             latency = atof(v[2].c_str());
@@ -292,6 +297,13 @@ int main(int argc, char **argv)
             continue;
         }
     }
+
+    if ((totalHashpower - 1.0 > TOTAL_HASHPOWER_EPS) ||
+        (totalHashpower + 1.0 < TOTAL_HASHPOWER_EPS)) {
+        std::cout << "Hashpower of all miner needs to be 100%" << std::endl;
+        return EXIT_FAILURE;
+    }
+
     std::vector<std::string> c = vm["biconnect"].as<std::vector<std::string>>();
     for (auto m : c) {
         std::vector<std::string> v;
