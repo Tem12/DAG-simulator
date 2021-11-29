@@ -28,7 +28,21 @@
 // FIXME : temp added to extern globally
 std::string config_file;
 time_t sim_start_time;
-int n_blocks = 2016;
+int n_blocks = 0;
+
+int max_mp_size = 0; // Maximum mempool size for each miner
+
+int min_tx_gen_size = 0; // Minimum number of generated transactions per
+                         // distribution
+int max_tx_gen_size = 0; // Maximum number of generated transactions per
+                         // distribution
+
+double min_tx_gen_secs = 0.0; // Minimum seconds of simulation time to
+                              // generate new transactions
+double max_tx_gen_secs = 0.0; // Maximum seconds of simulation time to
+                              // generate new transactions
+
+int blockSize = 0; // How many transactions contains each block
 
 static void Connect(Miner *m1, Miner *m2, double latency)
 {
@@ -59,14 +73,37 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
         for (int i = 0; i < 1000; i++) {
             auto in = fee_gen() * lambda;
             // int in = distr(rng);
-            for (auto miner : miners)
-                miner->mem_pool.insert(Record{ txID, (int)in });
+            for (auto miner : miners) {
+                miner->mem_pool.insert({ txID, (uint32_t)in });
+            }
             txID++;
         }
     }
 
-    int max_mp_size = 10000;
-    int txsz = 65;
+    int txsz;
+    double tx_wait_secs;
+
+    if (min_tx_gen_size == max_tx_gen_size) {
+        txsz = min_tx_gen_size;
+    }
+    else {
+        // TODO: make these uniform distribution global, remove init in each function call
+        boost::random::uniform_int_distribution<> tx_gen_distr(min_tx_gen_size,
+                                                               max_tx_gen_size);
+        txsz = tx_gen_distr(rng);
+    }
+
+    if (min_tx_gen_secs == max_tx_gen_secs) {
+        tx_wait_secs = min_tx_gen_secs;
+    }
+    else {
+        // TODO: make these uniform distribution global, remove init in each function call
+        boost::random::uniform_real_distribution<> tx_wait_secs_distr(
+            min_tx_gen_secs, max_tx_gen_secs);
+
+        tx_wait_secs = tx_wait_secs_distr(rng);
+    }
+
     // gen 65 transactions
     for (int i = 0; i < txsz; i++) {
         // int in = distr(rng);
@@ -75,13 +112,14 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
             if (miner->mem_pool.size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            miner->mem_pool.insert(Record{ txID, (int)in });
+            miner->mem_pool.insert({ txID, (uint32_t)in });
         }
         txID++;
     }
 
     // every 2 second add new transactions
-    double tNext = s.getSimTime() + 3;
+    double tNext = s.getSimTime() + tx_wait_secs;
+
     // n_blocks * 10 min mean time * 60 seconds
     // if (tNext < 100*600) {
     // TODO : this must be edited automatically in code, if set to an extreme
@@ -92,8 +130,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners,
     }
 }
 
-int run_simulation(boost::random::mt19937 &rng, int n_blocks,
-                   std::vector<Miner *> &miners)
+int run_simulation(boost::random::mt19937 &rng, std::vector<Miner *> &miners)
 {
     CScheduler simulator;
 
@@ -122,7 +159,7 @@ int run_simulation(boost::random::mt19937 &rng, int n_blocks,
 #endif
         auto t_found = t + t_delta;
         auto f = boost::bind(&Miner::FindBlock, miners[which_miner], rng,
-                             boost::ref(simulator), i);
+                             boost::ref(simulator), blockSize, i);
         simulator.schedule(f, t_found);
         t = t_found;
     }
@@ -135,6 +172,7 @@ int run_simulation(boost::random::mt19937 &rng, int n_blocks,
     simulator.serviceQueue();
 
     miners[0]->PrintStats();
+
     // blocks_found.clear();
     // blocks_found.insert(blocks_found.begin(), miners.size(), 0);
 
@@ -158,9 +196,6 @@ int main(int argc, char **argv)
     int n_runs = 1;
     int rng_seed = 0;
 
-    // FIXME : temp edited
-    // std::string config_file;
-
     po::options_description desc("Command-line options");
     desc.add_options()("help", "show options")(
         "blocks", po::value<int>(&n_blocks)->default_value(10000),
@@ -170,8 +205,21 @@ int main(int argc, char **argv)
         "runs", po::value<int>(&n_runs)->default_value(1),
         "number of times to run simulation")(
         "rng_seed", po::value<int>(&rng_seed)->default_value(4544),
-        // "rng_seed", po::value<int>(&rng_seed)->default_value(21242),
         "random number generator seed")(
+        "max_mp_size", po::value<int>(&max_mp_size)->default_value(10000),
+        "maximum mempool size for each miner")(
+        "min_tx_gen_size", po::value<int>(&min_tx_gen_size)->default_value(40),
+        "minimum number of generated transactions per distribution")(
+        "max_tx_gen_size", po::value<int>(&max_tx_gen_size)->default_value(80),
+        "maximum number of generated transactions per distribution")(
+        "min_tx_gen_secs",
+        po::value<double>(&min_tx_gen_secs)->default_value(2.0),
+        "minimum seconds of simulation time to generate new transactions")(
+        "max_tx_gen_secs",
+        po::value<double>(&max_tx_gen_secs)->default_value(5.0),
+        "maximum seconds of simulation time to generate new transactions")(
+        "block_size", po::value<int>(&blockSize)->default_value(100),
+        "transactions count in each block")(
         "config",
         po::value<std::string>(&config_file)->default_value("mining.cfg"),
         "Mining config filename");
@@ -187,10 +235,20 @@ int main(int argc, char **argv)
 
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
+
     std::ifstream f(config_file.c_str());
+    if (!f) {
+        std::cout << "Cannot open config file: " << config_file << std::endl;
+        return EXIT_FAILURE;
+    }
+
     po::store(po::parse_config_file<char>(f, config), vm);
     f.close();
     po::notify(vm);
+
+    if (vm.empty()) {
+        printf("is empty\n");
+    }
 
     if (vm.count("help")) {
         std::cout << desc << "\n";
@@ -272,7 +330,7 @@ int main(int argc, char **argv)
         // for (auto miner : miners) miner->ResetChain();
 
         // std::vector<int> blocks_found;
-        int best_chain_length = run_simulation(rng, n_blocks, miners);
+        int best_chain_length = run_simulation(rng, miners);
         // best_chain_sum += best_chain_length;
         // fraction_orphan_sum += 1.0 -
         // (double)best_chain_length/(double)n_blocks; for (int i = 0; i <

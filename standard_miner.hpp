@@ -6,11 +6,13 @@
 
 #include <boost/function.hpp>
 #include <list>
+#include <iterator>
 #include <map>
 #include <set>
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <unordered_map>
 
 #include <iostream>
 #include <string>
@@ -53,9 +55,9 @@ time_t last_progress_time = 0; // last progress print time
 
 struct Record {
     uint64_t id;
-    int fee;
+    uint32_t fee;
 
-    Record(uint64_t id, int fee) : id(id), fee(fee)
+    Record(uint64_t id, uint32_t fee) : id(id), fee(fee)
     {
     }
 
@@ -75,11 +77,8 @@ struct Block {
     std::vector<Record> txn;
 };
 
-typedef multi_index_container<
-    Record, indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
-                       ordered_non_unique<member<Record, int, &Record::fee>>,
-                       random_access<>>>
-    Mempool;
+// uint_64 id, uint_32 fee
+typedef std::unordered_map<uint64_t, uint32_t> Mempool;
 
 enum miner_type { HONEST, MALICIOUS };
 
@@ -95,7 +94,7 @@ class Miner
     u_int64_t balance;
 
     int txnum;
-    std::map<int, bool> tx;
+    std::map<uint32_t , bool> tx;
 
     int depth;
     // std::map<int, int> depth_map;
@@ -105,7 +104,7 @@ class Miner
         if (this->mID == 0) {
             int fluke = 0;
             int total = 0;
-            std::vector<int> em = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            std::vector<int> em(nextID);
 
             std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size()
                       << " => " << std::setprecision(3)
@@ -118,56 +117,58 @@ class Miner
                       << std::setprecision(3)
                       << (double)(10000 - depth) / 10000.0 * 100 << "%\n";
 
-            std::ofstream myfile;
-            myfile.open(config_file.append(".details.txt"));
+            //TODO: edit/separate printing each miner/block stats
 
-            // std::cout << abc.size() << "\n";
-            // int i = 0;
-            for (auto const &[key, val] : abc) {
-                // myfile << i++ << "\n";
-                total += val.first;
-                if (val.second.size() > 1) {
-                    if (val.second.size() > 3)
-                        fluke++;
-                    myfile << key << " - [" << val.first << "] ";
-                    for (auto it = val.second.begin(); it != val.second.end();
-                         ++it) {
-                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
-                               << ' ';
-                        int t = std::get<1>(*it);
-                        // payoff function
-                        /* split evenly distributed */
-                        // em[t] += val.first / val.second.size();
-                        /* only first come first serve */
-                        em[t] += val.first;
-                        break;
-                    }
-                    myfile << '\n';
-                } else {
-                    int t = std::get<1>(*val.second.data());
-                    em[t] += val.first;
-                }
-            }
-
-            std::cout << "[";
-            for (int e : em) {
-                std::cout << std::setprecision(3)
-                          << ((double)e / (double)total * 100.0) << "% ";
-            }
-            std::cout << "]" << std::endl;
-
-            std::cout << "fluke count " << fluke << std::endl;
-            // std::cout << total;
-            // for (auto it = abc.begin(); it != abc.end(); ++it) {
-            //     myfile << it->first << "- ";
-            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
-            //     ++it2) {
-            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
-            //         << ' ';
-            //     }
-            //     myfile << '\n';
-            // }
-            myfile.close();
+//            std::ofstream myfile;
+//            myfile.open(config_file.append(".details.txt"));
+//
+//            // std::cout << abc.size() << "\n";
+//            // int i = 0;
+//            for (auto const &[key, val] : abc) {
+//                // myfile << i++ << "\n";
+//                total += val.first;
+//                if (val.second.size() > 1) {
+//                    if (val.second.size() > 3)
+//                        fluke++;
+//                    myfile << key << " - [" << val.first << "] ";
+//                    for (auto it = val.second.begin(); it != val.second.end();
+//                         ++it) {
+//                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
+//                               << ' ';
+//                        int t = std::get<1>(*it);
+//                        // payoff function
+//                        /* split evenly distributed */
+//                        // em[t] += val.first / val.second.size();
+//                        /* only first come first serve */
+//                        em[t] += val.first;
+//                        break;
+//                    }
+//                    myfile << '\n';
+//                } else {
+//                    int t = std::get<1>(*val.second.data());
+//                    em[t] += val.first;
+//                }
+//            }
+//
+//            std::cout << "[";
+//            for (int e : em) {
+//                std::cout << std::setprecision(3)
+//                          << ((double)e / (double)total * 100.0) << "% ";
+//            }
+//            std::cout << "]" << std::endl;
+//
+//            std::cout << "fluke count " << fluke << std::endl;
+//            // std::cout << total;
+//            // for (auto it = abc.begin(); it != abc.end(); ++it) {
+//            //     myfile << it->first << "- ";
+//            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
+//            //     ++it2) {
+//            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
+//            //         << ' ';
+//            //     }
+//            //     myfile << '\n';
+//            // }
+//            myfile.close();
         }
     }
 
@@ -193,27 +194,42 @@ class Miner
         // map_bcst
     }
 
+    static bool SortCmpAsc(std::pair<uint64_t, uint32_t>& a,
+             std::pair<uint64_t, uint32_t>& b)
+    {
+        return a.first < b.first;
+    }
+
+    static bool SortCmpDesc(std::pair<uint64_t, uint32_t>& a,
+                           std::pair<uint64_t, uint32_t>& b)
+    {
+        return a.first > b.first;
+    }
+
+    std::vector<std::pair<uint64_t, uint32_t>> getSortedMPAsc() {
+        std::vector<std::pair<uint64_t, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
+        std::sort(txs.begin(), txs.end(), SortCmpAsc);
+        return txs;
+    }
+
+    std::vector<std::pair<uint64_t, uint32_t>> getSortedMPDesc() {
+        std::vector<std::pair<uint64_t, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
+        std::sort(txs.begin(), txs.end(), SortCmpDesc);
+        return txs;
+    }
+
     void RemoveMP(const int size)
     {
-        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
-        auto a = fee_index.begin();
-        auto b = fee_index.begin();
-        // b = b + size;
-        for (int i = 0; i < size; i++)
-            b++;
-        fee_index.erase(a, b);
+        std::vector<std::pair<uint64_t, uint32_t>> sortedMp =
+            getSortedMPAsc();
 
-        // for (auto [it, i] = std::tuple{fee_index.begin(), 0}; i<how_many;
-        // it++, i++) {
-        //     fee_index.erase(it);
-        // }
-        // for (auto it=fee_index.rbegin(), int i=0; i<how_many; it++, i++) {
-        //     fee_index.erase(it);
-        // }
+        for (int i = 0; i < size; i++) {
+            mem_pool.erase(sortedMp[i].first);
+        }
     }
 
     virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s,
-                           int blockNumber)
+                           int blockSize, int blockNumber)
     {
         // Extend the chain:
         // auto chain_copy =
@@ -227,8 +243,6 @@ class Miner
         // auto blocks_copy =
         // std::make_shared<std::vector<Block>>(blocks->begin(),
         //                                                         blocks->end());
-        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
-        const auto &rand_index = mem_pool.get<2>();
         // std::cout << rand_index[0].name << '\n';
 
         Block tmp_block;
@@ -243,19 +257,39 @@ class Miner
         // std::mt19937 gen(rd()); // seed the generator
         // std::uniform_int_distribution<> distr(0, mem_pool.size());
 
-        // Honest miners
         if (this->type == HONEST) {
-            for (int i = 0; i < 100; i++) {
+            // Honest miners
+
+            for (int i = 0; i < blockSize; i++) {
                 std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
-                uint64_t id = rand_index[distr(rng)].id;
-                int fee = rand_index[distr(rng)].fee;
+                int rand_index = distr(rng);
+                auto it = mem_pool.begin();
+                std::advance(it, rand_index);
+
+//                for (auto& it : mem_pool) {
+//                    std::cout << it.first << ' '
+//                              << it.second << std::endl;
+//                }
+//
+//                printf("%\n", mem_pool.size() - 1);
+
+//                int rand_index = distr(rng);
+
+//                uint64_t id = (mem_pool.find(rand_index))->first;
+//                uint32_t fee = (mem_pool.find(rand_index))->second;
+
+                uint64_t id = it->first;
+                uint32_t fee = it->second;
+
                 tmp_block.txn.push_back(Record{ id, fee });
                 abc[id].first = fee;
                 abc[id].second.push_back(std::tuple<int, int>(depth, mID));
+
                 if (this->mID == 0) {
                     tx[id] = true;
                 }
-                auto it = mem_pool.find(id);
+
+//                auto it = mem_pool.find(id);
                 mem_pool.erase(it);
             }
             if (this->mID == 0) {
@@ -267,32 +301,20 @@ class Miner
             // }
         } else if (this->type == MALICIOUS) {
             // Malicious miners
-            int i = 0;
-            for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
-                // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
-                tmp_block.txn.push_back(Record{ it->id, it->fee });
-                abc[it->id].first = it->fee;
-                abc[it->id].second.push_back(std::tuple<int, int>(depth, mID));
+
+            std::vector<std::pair<uint64_t, uint32_t>> sortedMp = getSortedMPDesc();
+            for (int i = 0; i < blockSize; i++) {
+                tmp_block.txn.push_back(Record{ sortedMp[i].first, sortedMp[i].second });
+                abc[sortedMp[i].first].first = sortedMp[i].second;
+                abc[sortedMp[i].first].second.push_back(std::tuple<int, int>(depth, mID));
+
+                // Mark that transaction has been processed (to count duplicates)
                 if (this->mID == 0) {
-                    tx[it->id] = true;
+                    tx[sortedMp[i].first] = true;
                 }
-                // id_index.erase(it->id);
-                if (i >= 99)
-                    break; // max 100 transactions in block
-                i++;
-            }
 
-            if (this->mID == 0) {
-                txnum += tmp_block.txn.size();
-            }
-
-            // delete processed mined transactions in local mempool
-            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
-            for (auto &elem : tmp_block.txn) {
-                id_index.erase(elem.id);
-                //     if (this->mID == 0) {
-                //         tx[elem.id] = true;
-                //     }
+                // Remove processed transactions
+                mem_pool.erase(sortedMp[i].first);
             }
 
             // blocks_copy->push_back(tmp_block);
@@ -334,9 +356,9 @@ class Miner
             if (this->mID == 0) {
                 txnum += b.txn.size();
             }
-            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+
             for (auto &elem : b.txn) {
-                id_index.erase(elem.id);
+                mem_pool.erase(elem.id);
                 if (this->mID == 0) {
                     tx[elem.id] = true;
                 }
@@ -372,20 +394,28 @@ class Miner
                                  boost::ref(s), b, block_latency);
             s.schedule(f, tPeer);
         }
-        if (from->mID == 0 && b.id * 100 / n_blocks > progress) {
-            progress++;
 
-            if (progress == 1) {
-                last_progress_time = sim_start_time;
-            }
+        // TODO: b.id is not synced, some block can occur lately than some fewer (eg. 22 before 20)
+        // TODO : parametrize printing update stats
+//        if (from->mID == 0 && b.id * 100 / n_blocks > progress) {
+//            progress++;
+//
+//            if (progress == 1) {
+//                last_progress_time = sim_start_time;
+//            }
+//
+//            time_t curr_time = time(nullptr);
+//            printf("%d%%\tBlock %d\t", progress, b.id);
+//            auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) *
+//                             (100 - progress);
+//            print_diff_time(time_diff);
+//
+//            last_progress_time = curr_time;
+//        }
 
-            time_t curr_time = time(nullptr);
-            printf("%d%%\tBlock %d\t", progress, b.id);
-            auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) *
-                             (100 - progress);
-            print_diff_time(time_diff);
-
-            last_progress_time = curr_time;
+        if (b.id == n_blocks - 1) {
+            printf("%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
+            exit(0);
         }
     }
 
