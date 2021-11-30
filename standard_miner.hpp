@@ -27,14 +27,12 @@
 #include <boost/multi_index_container.hpp>
 
 #include "est_time.h"
-#include "RandomAccessMap.h"
 
 class Miner;
 class PeerInfo
 {
   public:
-    PeerInfo(Miner *_peer, int _chain_tip, double _latency)
-        : peer(_peer), chain_tip(_chain_tip), latency(_latency)
+    PeerInfo(Miner *_peer, int _chain_tip, double _latency) : peer(_peer), chain_tip(_chain_tip), latency(_latency)
     {
     }
 
@@ -49,6 +47,13 @@ using namespace boost::multi_index;
 extern std::string config_file;
 extern time_t sim_start_time;
 extern int n_blocks;
+
+// ===================================== Optimization experiment code =====================================
+// Extern fp from main.cpp
+extern FILE *time_est_file;
+extern FILE *mempool_sizes_file;
+extern FILE *total_time_file;
+// ========================================================================================================
 
 // FIXME : temp variable
 int progress = 0; // progress in percent
@@ -95,7 +100,7 @@ class Miner
     u_int64_t balance;
 
     int txnum;
-    std::map<uint32_t , bool> tx;
+    std::map<uint32_t, bool> tx;
 
     int depth;
     // std::map<int, int> depth_map;
@@ -107,69 +112,66 @@ class Miner
             int total = 0;
             std::vector<int> em(nextID);
 
-            std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size()
-                      << " => " << std::setprecision(3)
-                      << 100 - (((double)tx.size() / (double)txnum) * 100)
-                      << "%\n";
+            std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size() << " => " << std::setprecision(3)
+                      << 100 - (((double)tx.size() / (double)txnum) * 100) << "%\n";
             // for (const auto& [key, value] : depth_map) {
             // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 10000 << " Depth:" << depth << " => "
-                      << std::setprecision(3)
+            std::cout << "Blocks:" << 10000 << " Depth:" << depth << " => " << std::setprecision(3)
                       << (double)(10000 - depth) / 10000.0 * 100 << "%\n";
 
-            //TODO: edit/separate printing each miner/block stats
+            // TODO: edit/separate printing each miner/block stats
 
-//            std::ofstream myfile;
-//            myfile.open(config_file.append(".details.txt"));
-//
-//            // std::cout << abc.size() << "\n";
-//            // int i = 0;
-//            for (auto const &[key, val] : abc) {
-//                // myfile << i++ << "\n";
-//                total += val.first;
-//                if (val.second.size() > 1) {
-//                    if (val.second.size() > 3)
-//                        fluke++;
-//                    myfile << key << " - [" << val.first << "] ";
-//                    for (auto it = val.second.begin(); it != val.second.end();
-//                         ++it) {
-//                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
-//                               << ' ';
-//                        int t = std::get<1>(*it);
-//                        // payoff function
-//                        /* split evenly distributed */
-//                        // em[t] += val.first / val.second.size();
-//                        /* only first come first serve */
-//                        em[t] += val.first;
-//                        break;
-//                    }
-//                    myfile << '\n';
-//                } else {
-//                    int t = std::get<1>(*val.second.data());
-//                    em[t] += val.first;
-//                }
-//            }
-//
-//            std::cout << "[";
-//            for (int e : em) {
-//                std::cout << std::setprecision(3)
-//                          << ((double)e / (double)total * 100.0) << "% ";
-//            }
-//            std::cout << "]" << std::endl;
-//
-//            std::cout << "fluke count " << fluke << std::endl;
-//            // std::cout << total;
-//            // for (auto it = abc.begin(); it != abc.end(); ++it) {
-//            //     myfile << it->first << "- ";
-//            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
-//            //     ++it2) {
-//            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
-//            //         << ' ';
-//            //     }
-//            //     myfile << '\n';
-//            // }
-//            myfile.close();
+            //            std::ofstream myfile;
+            //            myfile.open(config_file.append(".details.txt"));
+            //
+            //            // std::cout << abc.size() << "\n";
+            //            // int i = 0;
+            //            for (auto const &[key, val] : abc) {
+            //                // myfile << i++ << "\n";
+            //                total += val.first;
+            //                if (val.second.size() > 1) {
+            //                    if (val.second.size() > 3)
+            //                        fluke++;
+            //                    myfile << key << " - [" << val.first << "] ";
+            //                    for (auto it = val.second.begin(); it != val.second.end();
+            //                         ++it) {
+            //                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
+            //                               << ' ';
+            //                        int t = std::get<1>(*it);
+            //                        // payoff function
+            //                        /* split evenly distributed */
+            //                        // em[t] += val.first / val.second.size();
+            //                        /* only first come first serve */
+            //                        em[t] += val.first;
+            //                        break;
+            //                    }
+            //                    myfile << '\n';
+            //                } else {
+            //                    int t = std::get<1>(*val.second.data());
+            //                    em[t] += val.first;
+            //                }
+            //            }
+            //
+            //            std::cout << "[";
+            //            for (int e : em) {
+            //                std::cout << std::setprecision(3)
+            //                          << ((double)e / (double)total * 100.0) << "% ";
+            //            }
+            //            std::cout << "]" << std::endl;
+            //
+            //            std::cout << "fluke count " << fluke << std::endl;
+            //            // std::cout << total;
+            //            // for (auto it = abc.begin(); it != abc.end(); ++it) {
+            //            //     myfile << it->first << "- ";
+            //            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
+            //            //     ++it2) {
+            //            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
+            //            //         << ' ';
+            //            //     }
+            //            //     myfile << '\n';
+            //            // }
+            //            myfile.close();
         }
     }
 
@@ -177,8 +179,7 @@ class Miner
     typedef boost::function<double(double, double)> JitterFunction;
 
     Miner(double _hash_fraction, double _block_latency, miner_type _type, JitterFunction _func)
-        : hash_fraction(_hash_fraction), type(_type), block_latency(_block_latency),
-          jitter_func(_func), mID(nextID++)
+        : hash_fraction(_hash_fraction), type(_type), block_latency(_block_latency), jitter_func(_func), mID(nextID++)
     {
         // best_chain = std::make_shared<std::vector<int>>();
         blocks = std::make_shared<std::vector<Block>>();
@@ -195,25 +196,25 @@ class Miner
         // map_bcst
     }
 
-    static bool SortCmpAsc(std::pair<uint64_t, uint32_t>& a,
-             std::pair<uint64_t, uint32_t>& b)
+    static bool SortCmpAsc(std::pair<uint64_t, uint32_t> &a, std::pair<uint64_t, uint32_t> &b)
     {
         return a.first < b.first;
     }
 
-    static bool SortCmpDesc(std::pair<uint64_t, uint32_t>& a,
-                           std::pair<uint64_t, uint32_t>& b)
+    static bool SortCmpDesc(std::pair<uint64_t, uint32_t> &a, std::pair<uint64_t, uint32_t> &b)
     {
         return a.first > b.first;
     }
 
-    std::vector<std::pair<uint64_t, uint32_t>> getSortedMPAsc() {
+    std::vector<std::pair<uint64_t, uint32_t>> getSortedMPAsc()
+    {
         std::vector<std::pair<uint64_t, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
         std::sort(txs.begin(), txs.end(), SortCmpAsc);
         return txs;
     }
 
-    std::vector<std::pair<uint64_t, uint32_t>> getSortedMPDesc() {
+    std::vector<std::pair<uint64_t, uint32_t>> getSortedMPDesc()
+    {
         std::vector<std::pair<uint64_t, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
         std::sort(txs.begin(), txs.end(), SortCmpDesc);
         return txs;
@@ -221,16 +222,14 @@ class Miner
 
     void RemoveMP(const int size)
     {
-        std::vector<std::pair<uint64_t, uint32_t>> sortedMp =
-            getSortedMPAsc();
+        std::vector<std::pair<uint64_t, uint32_t>> sortedMp = getSortedMPAsc();
 
         for (int i = 0; i < size; i++) {
             mem_pool.erase(sortedMp[i].first);
         }
     }
 
-    virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s,
-                           int blockSize, int blockNumber)
+    virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s, int blockSize, int blockNumber)
     {
         // Extend the chain:
         // auto chain_copy =
@@ -265,17 +264,17 @@ class Miner
                 std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
                 int rand_index = distr(rng);
 
-//                for (auto& it : mem_pool) {
-//                    std::cout << it.first << ' '
-//                              << it.second << std::endl;
-//                }
-//
-//                printf("%\n", mem_pool.size() - 1);
+                //                for (auto& it : mem_pool) {
+                //                    std::cout << it.first << ' '
+                //                              << it.second << std::endl;
+                //                }
+                //
+                //                printf("%\n", mem_pool.size() - 1);
 
-//                int rand_index = distr(rng);
+                //                int rand_index = distr(rng);
 
-//                uint64_t id = (mem_pool.find(rand_index))->first;
-//                uint32_t fee = (mem_pool.find(rand_index))->second;
+                //                uint64_t id = (mem_pool.find(rand_index))->first;
+                //                uint32_t fee = (mem_pool.find(rand_index))->second;
 
                 auto mem_pool_tx = mem_pool.find(rand_index);
                 uint64_t id = mem_pool_tx->first;
@@ -289,7 +288,7 @@ class Miner
                     tx[id] = true;
                 }
 
-//                auto it = mem_pool.find(id);
+                //                auto it = mem_pool.find(id);
                 mem_pool.erase(rand_index);
             }
             if (this->mID == 0) {
@@ -383,38 +382,55 @@ class Miner
 
             double jitter = 0;
             if (peer.latency > 0)
-                jitter =
-                    jitter_func(-peer.latency / 1000., peer.latency / 1000.);
+                jitter = jitter_func(-peer.latency / 1000., peer.latency / 1000.);
             double tPeer = s.getSimTime() + peer.latency + jitter + latency;
             // auto f = boost::bind(&Miner::ConsiderChain, peer.peer, from,
             // boost::ref(s),
             //                      blcks, b, block_latency);
 
-            auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this,
-                                 boost::ref(s), b, block_latency);
+            auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this, boost::ref(s), b, block_latency);
             s.schedule(f, tPeer);
         }
 
         // TODO: b.id is not synced, some block can occur lately than some fewer (eg. 22 before 20)
         // TODO : parametrize printing update stats
-//        if (from->mID == 0 && b.id * 100 / n_blocks > progress) {
-//            progress++;
-//
-//            if (progress == 1) {
-//                last_progress_time = sim_start_time;
-//            }
-//
-//            time_t curr_time = time(nullptr);
-//            printf("%d%%\tBlock %d\t", progress, b.id);
-//            auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) *
-//                             (100 - progress);
-//            print_diff_time(time_diff);
-//
-//            last_progress_time = curr_time;
-//        }
+        if (from->mID == 0 && b.id * 100 / n_blocks > progress) {
+            progress++;
 
+            if (progress == 1) {
+                last_progress_time = sim_start_time;
+            }
+
+            time_t curr_time = time(nullptr);
+            printf("%d%%\tBlock %d\t", progress, b.id);
+            auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) * (100 - progress);
+            print_diff_time(time_diff);
+
+            last_progress_time = curr_time;
+
+            // ===================================== Optimization experiment code =====================================
+            // Save simulation est time
+            fprintf(time_est_file, "%d, %ld\n", progress, time_diff);
+            // ========================================================================================================
+        }
+
+        // ===================================== Optimization experiment code =====================================
+        // Save current mempool fullness for each node
+        fprintf(mempool_sizes_file, "%d, %lu\n", this->mID, mem_pool.size());
+        // ========================================================================================================
+
+        // FIXME: End simulation is properly computed yet, this temporary solution will stop simulation on last block
         if (b.id == n_blocks - 1) {
             printf("%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
+
+            // ===================================== Optimization experiment code =====================================
+            // Save total time of program running
+            fprintf(total_time_file, "%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
+
+            fclose(time_est_file);
+            fclose(mempool_sizes_file);
+            fclose(total_time_file);
+            // ========================================================================================================
             exit(0);
         }
     }
@@ -444,8 +460,7 @@ class Miner
     // std::map<int, std::map<int, bool>> adjTable;
     std::map<int, bool> map_bcst;
     static int nextID;
-    static std::map<uint64_t, std::pair<int, std::vector<std::tuple<int, int>>>>
-        abc;
+    static std::map<uint64_t, std::pair<int, std::vector<std::tuple<int, int>>>> abc;
 };
 
 int Miner::nextID = 0;
