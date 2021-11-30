@@ -84,7 +84,7 @@ struct Block {
 };
 
 // uint_64 id, uint_32 fee
-typedef std::map<uint64_t, uint32_t> Mempool;
+typedef std::unordered_map<uint64_t, uint32_t> Mempool;
 
 enum miner_type { HONEST, MALICIOUS };
 
