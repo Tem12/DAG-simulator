@@ -47,6 +47,8 @@ using namespace boost::multi_index;
 extern std::string config_file;
 extern time_t sim_start_time;
 extern int n_blocks;
+extern int max_mp_size;
+extern bool end_simulation;
 
 // ===================================== Optimization experiment code =====================================
 // Extern fp from main.cpp
@@ -113,7 +115,7 @@ class Miner
         if (this->mID == 0) {
             int fluke = 0;
             int total = 0;
-            std::vector<int> em(nextID);
+            std::vector<int> em(nextID, 0);
 
             std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size() << " => " << std::setprecision(3)
                       << 100 - (((double)tx.size() / (double)txnum) * 100) << "%\n";
@@ -139,14 +141,15 @@ class Miner
                     myfile << key << " - [" << val.first << "] ";
                     for (auto it = val.second.begin(); it != val.second.end(); ++it) {
                         myfile << std::get<0>(*it) << ',' << std::get<1>(*it) << ' ';
-                        int t = std::get<1>(*it);
                         // payoff function
                         /* split evenly distributed */
                         // em[t] += val.first / val.second.size();
                         /* only first come first serve */
-                        em[t] += val.first;
-                        break;
                     }
+
+                    int t = std::get<1>(*(val.second.begin()));
+                    em[t] += val.first;
+
                     myfile << '\n';
                 } else {
                     int t = std::get<1>(*val.second.data());
@@ -377,7 +380,7 @@ class Miner
 
         // TODO: b.id is not synced, some block can occur lately than some fewer (eg. 22 before 20)
         // TODO : parametrize printing update stats
-        if (from->mID == 0 && b.id * 100 / n_blocks > progress) {
+        if (from->mID == 0 && (b.id + 1) * 100 / n_blocks > progress) {
             progress++;
 
             if (progress == 1) {
@@ -389,7 +392,15 @@ class Miner
             auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) * (100 - progress);
             print_diff_time(time_diff);
 
+            // Print mempool fullness for 1st miner
+            printf("\tMiner[%d] - %ld (%.2f%%)\n", this->mID, this->mem_pool.size(),
+                   ((double)this->mem_pool.size() / max_mp_size) * 100.0);
+
             last_progress_time = curr_time;
+
+            if (progress == 100) {
+                end_simulation = true;
+            }
 
             // ===================================== Optimization experiment code =====================================
             // Save simulation est time
@@ -403,19 +414,21 @@ class Miner
         // ========================================================================================================
 
         // FIXME: End simulation is properly computed yet, this temporary solution will stop simulation on last block
-        if (b.id == n_blocks - 1) {
-            printf("%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
-
-            // ===================================== Optimization experiment code =====================================
-            // Save total time of program running
-            fprintf(total_time_file, "%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
-
-            fclose(time_est_file);
-            fclose(mempool_sizes_file);
-            fclose(total_time_file);
-            // ========================================================================================================
-            exit(0);
-        }
+        //        if (b.id == n_blocks - 1) {
+        //            printf("%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
+        //
+        //            // ===================================== Optimization experiment code
+        //            =====================================
+        //            // Save total time of program running
+        //            fprintf(total_time_file, "%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
+        //
+        //            fclose(time_est_file);
+        //            fclose(mempool_sizes_file);
+        //            fclose(total_time_file);
+        //            //
+        //            ========================================================================================================
+        //            exit(0);
+        //        }
     }
 
     // virtual void ResetChain() {

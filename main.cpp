@@ -31,6 +31,7 @@
 std::string config_file;
 time_t sim_start_time;
 int n_blocks = 0;
+bool end_simulation = false;
 
 int max_mp_size = 0; // Maximum mempool size for each miner
 
@@ -140,7 +141,8 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
     // if (tNext < 100*600) {
     // TODO : this must be edited automatically in code, if set to an extreme
     // high, simulation will last much longer
-    if (tNext < 120 * 10000) {
+
+    if (!end_simulation) {
         auto f = boost::bind(&mempool_update, rng, miners, boost::ref(s));
         s.schedule(f, tNext);
     }
@@ -291,11 +293,12 @@ int main(int argc, char **argv)
             miners.push_back(
                 new Miner(hashpower, latency, MALICIOUS, boost::bind(random_real, boost::ref(rng), _1, _2)));
         } else {
-            std::cout << "Couldn't parse miner description: " << m << "\n";
-            continue;
+            std::cout << "Invalid miner description (can be either honest or malicious) - " << m << "\n";
+            return EXIT_FAILURE;
         }
     }
 
+    // Summing all haspowers produce floating point error. To avoid this, TOTAL_HASHPOWER_EPS contains maximum correction
     if ((totalHashpower - 1.0 > TOTAL_HASHPOWER_EPS) || (totalHashpower + 1.0 < TOTAL_HASHPOWER_EPS)) {
         std::cout << "Hashpower of all miner needs to be 100%" << std::endl;
         return EXIT_FAILURE;
@@ -397,6 +400,7 @@ int main(int argc, char **argv)
     printf("Simulation duration: ");
     auto time_diff = (time_t)difftime(time(nullptr), sim_start_time);
     print_diff_time(time_diff);
+    printf("\n");
 
     // ===================================== Optimization experiment code =====================================
     fclose(time_est_file);
