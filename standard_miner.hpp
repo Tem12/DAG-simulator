@@ -84,10 +84,9 @@ struct Block {
 };
 
 // uint_64 id, uint_32 fee
-typedef multi_index_container<
-    Record, indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
-                       ordered_non_unique<member<Record, uint32_t, &Record::fee>>,
-                       random_access<>>>
+typedef multi_index_container<Record,
+                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
+                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
     Mempool;
 
 enum miner_type { HONEST, MALICIOUS };
@@ -126,56 +125,53 @@ class Miner
 
             // TODO: edit/separate printing each miner/block stats
 
-            //            std::ofstream myfile;
-            //            myfile.open(config_file.append(".details.txt"));
-            //
-            //            // std::cout << abc.size() << "\n";
-            //            // int i = 0;
-            //            for (auto const &[key, val] : abc) {
-            //                // myfile << i++ << "\n";
-            //                total += val.first;
-            //                if (val.second.size() > 1) {
-            //                    if (val.second.size() > 3)
-            //                        fluke++;
-            //                    myfile << key << " - [" << val.first << "] ";
-            //                    for (auto it = val.second.begin(); it != val.second.end();
-            //                         ++it) {
-            //                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it)
-            //                               << ' ';
-            //                        int t = std::get<1>(*it);
-            //                        // payoff function
-            //                        /* split evenly distributed */
-            //                        // em[t] += val.first / val.second.size();
-            //                        /* only first come first serve */
-            //                        em[t] += val.first;
-            //                        break;
-            //                    }
-            //                    myfile << '\n';
-            //                } else {
-            //                    int t = std::get<1>(*val.second.data());
-            //                    em[t] += val.first;
-            //                }
-            //            }
-            //
-            //            std::cout << "[";
-            //            for (int e : em) {
-            //                std::cout << std::setprecision(3)
-            //                          << ((double)e / (double)total * 100.0) << "% ";
-            //            }
-            //            std::cout << "]" << std::endl;
-            //
-            //            std::cout << "fluke count " << fluke << std::endl;
-            //            // std::cout << total;
-            //            // for (auto it = abc.begin(); it != abc.end(); ++it) {
-            //            //     myfile << it->first << "- ";
-            //            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
-            //            //     ++it2) {
-            //            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
-            //            //         << ' ';
-            //            //     }
-            //            //     myfile << '\n';
-            //            // }
-            //            myfile.close();
+            std::ofstream myfile;
+            myfile.open(config_file.append(".details.txt"));
+
+            // std::cout << abc.size() << "\n";
+            // int i = 0;
+            for (auto const &[key, val] : abc) {
+                // myfile << i++ << "\n";
+                total += val.first;
+                if (val.second.size() > 1) {
+                    if (val.second.size() > 3)
+                        fluke++;
+                    myfile << key << " - [" << val.first << "] ";
+                    for (auto it = val.second.begin(); it != val.second.end(); ++it) {
+                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it) << ' ';
+                        int t = std::get<1>(*it);
+                        // payoff function
+                        /* split evenly distributed */
+                        // em[t] += val.first / val.second.size();
+                        /* only first come first serve */
+                        em[t] += val.first;
+                        break;
+                    }
+                    myfile << '\n';
+                } else {
+                    int t = std::get<1>(*val.second.data());
+                    em[t] += val.first;
+                }
+            }
+
+            std::cout << "[";
+            for (int e : em) {
+                std::cout << std::setprecision(3) << ((double)e / (double)total * 100.0) << "% ";
+            }
+            std::cout << "]" << std::endl;
+
+            std::cout << "fluke count " << fluke << std::endl;
+            // std::cout << total;
+            // for (auto it = abc.begin(); it != abc.end(); ++it) {
+            //     myfile << it->first << "- ";
+            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
+            //     ++it2) {
+            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
+            //         << ' ';
+            //     }
+            //     myfile << '\n';
+            // }
+            myfile.close();
         }
     }
 
