@@ -47,22 +47,21 @@ double max_tx_gen_secs = 0.0; // Maximum seconds of simulation time to
 
 int blockSize = 0; // How many transactions contains each block
 
-// ===================================== Optimization experiment code =====================================
 int config_variant_id = 0;
 int run_id = 0;
-
+// ===================================== Optimization experiment code =====================================
 // Time estimation data, optimization_exp/time_est_{CFG_variant}_{RUN_ID}
-std::string time_est_filename = "experiment_mempool_optimization/time_est_";
-FILE *time_est_file;
+//std::string time_est_filename = "experiment_mempool_optimization/time_est_";
+//FILE *time_est_file;
 
 // Mempool fullness data, optimization_exp/mempool_sizes_{CFG_variant}_{RUN_ID}
-std::string mempool_size_filename = "experiment_mempool_optimization/mempool_sizes_";
-FILE *mempool_sizes_file;
+//std::string mempool_size_filename = "experiment_mempool_optimization/mempool_sizes_";
+//FILE *mempool_sizes_file;
 
 // Total time of running application data,
 // optimization_exp/total_time_{CFG_variant}_{RUN_ID}
-std::string total_time_filename = "experiment_mempool_optimization/total_time_";
-FILE *total_time_file;
+//std::string total_time_filename = "experiment_mempool_optimization/total_time_";
+//FILE *total_time_file;
 // ========================================================================================================
 
 static void Connect(Miner *m1, Miner *m2, double latency)
@@ -329,34 +328,34 @@ int main(int argc, char **argv)
     }
 
     // ===================================== Optimization experiment code =====================================
-    time_est_filename.append(std::to_string(config_variant_id))
-        .append("_")
-        .append(std::to_string(run_id))
-        .append(".csv");
-
-    mempool_size_filename.append(std::to_string(config_variant_id))
-        .append("_")
-        .append(std::to_string(run_id))
-        .append(".csv");
-
-    total_time_filename.append(std::to_string(config_variant_id))
-        .append("_")
-        .append(std::to_string(run_id))
-        .append(".csv");
-
-    time_est_file = fopen(time_est_filename.c_str(), "w");
-    mempool_sizes_file = fopen(mempool_size_filename.c_str(), "w");
-    total_time_file = fopen(total_time_filename.c_str(), "w");
-
-    if (time_est_file == nullptr) {
-        std::cout << "Cannot open time_est_file for optimization experiment" << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    if (mempool_sizes_file == nullptr) {
-        std::cout << "Cannot open mempool_sizes_file for optimization experiment" << std::endl;
-        return EXIT_FAILURE;
-    }
+//    time_est_filename.append(std::to_string(config_variant_id))
+//        .append("_")
+//        .append(std::to_string(run_id))
+//        .append(".csv");
+//
+//    mempool_size_filename.append(std::to_string(config_variant_id))
+//        .append("_")
+//        .append(std::to_string(run_id))
+//        .append(".csv");
+//
+//    total_time_filename.append(std::to_string(config_variant_id))
+//        .append("_")
+//        .append(std::to_string(run_id))
+//        .append(".csv");
+//
+//    time_est_file = fopen(time_est_filename.c_str(), "w");
+//    mempool_sizes_file = fopen(mempool_size_filename.c_str(), "w");
+//    total_time_file = fopen(total_time_filename.c_str(), "w");
+//
+//    if (time_est_file == nullptr) {
+//        std::cout << "Cannot open time_est_file for optimization experiment" << std::endl;
+//        return EXIT_FAILURE;
+//    }
+//
+//    if (mempool_sizes_file == nullptr) {
+//        std::cout << "Cannot open mempool_sizes_file for optimization experiment" << std::endl;
+//        return EXIT_FAILURE;
+//    }
     // ========================================================================================================
 
     // int best_chain_sum = 0;
@@ -403,9 +402,9 @@ int main(int argc, char **argv)
     printf("\n");
 
     // ===================================== Optimization experiment code =====================================
-    fclose(time_est_file);
-    fclose(mempool_sizes_file);
-    fclose(total_time_file);
+//    fclose(time_est_file);
+//    fclose(mempool_sizes_file);
+//    fclose(total_time_file);
     // ========================================================================================================
 
     return 0;

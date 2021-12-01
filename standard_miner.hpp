@@ -52,9 +52,9 @@ extern bool end_simulation;
 
 // ===================================== Optimization experiment code =====================================
 // Extern fp from main.cpp
-extern FILE *time_est_file;
-extern FILE *mempool_sizes_file;
-extern FILE *total_time_file;
+//extern FILE *time_est_file;
+//extern FILE *mempool_sizes_file;
+//extern FILE *total_time_file;
 // ========================================================================================================
 
 // FIXME : temp variable
@@ -404,13 +404,13 @@ class Miner
 
             // ===================================== Optimization experiment code =====================================
             // Save simulation est time
-            fprintf(time_est_file, "%d, %ld\n", progress, time_diff);
+//            fprintf(time_est_file, "%d, %ld\n", progress, time_diff);
             // ========================================================================================================
         }
 
         // ===================================== Optimization experiment code =====================================
         // Save current mempool fullness for each node
-        fprintf(mempool_sizes_file, "%d, %lu\n", this->mID, mem_pool.size());
+//        fprintf(mempool_sizes_file, "%d, %lu\n", this->mID, mem_pool.size());
         // ========================================================================================================
 
         // FIXME: End simulation is properly computed yet, this temporary solution will stop simulation on last block
