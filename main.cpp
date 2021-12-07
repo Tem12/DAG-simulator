@@ -358,6 +358,18 @@ int main(int argc, char **argv)
 //    }
     // ========================================================================================================
 
+    // ========================================================
+    // Print 0% progress
+    time_t curr_time = time(nullptr);
+    char time_str[26];
+    struct tm* tm_info;
+
+    tm_info = localtime(&curr_time);
+
+    strftime(time_str, 26, "%m-%d %H:%M:%S", tm_info);
+    printf("[%s]\t0%%\n", time_str);
+    // ========================================================
+
     // int best_chain_sum = 0;
     // double fraction_orphan_sum = 0.0;
     // std::vector<int> blocks_found_sum;

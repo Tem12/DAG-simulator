@@ -388,6 +388,17 @@ class Miner
             }
 
             time_t curr_time = time(nullptr);
+
+            // ========================================================
+            char time_str[26];
+            struct tm* tm_info;
+
+            tm_info = localtime(&curr_time);
+
+            strftime(time_str, 26, "%m-%d %H:%M:%S", tm_info);
+            printf("[%s]\t", time_str);
+            // ========================================================
+
             printf("%d%%\tBlock %d\t", progress, b.id);
             auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) * (100 - progress);
             print_diff_time(time_diff);
