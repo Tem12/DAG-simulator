@@ -155,8 +155,8 @@ class Miner
             // for (const auto& [key, value] : depth_map) {
             // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 10000 << " Depth:" << depth << " => " << std::setprecision(3)
-                      << (double)(10000 - depth) / 10000.0 * 100 << "%\n";
+            std::cout << "Blocks:" << n_blocks << " Depth:" << depth << " => " << std::setprecision(3)
+                      << (double)(n_blocks - depth) / (double)n_blocks * 100 << "%\n";
 
             // TODO: edit/separate printing each miner/block stats
 
