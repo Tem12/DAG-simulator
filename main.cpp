@@ -92,7 +92,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
             auto in = fee_gen() * lambda;
             // int in = distr(rng);
             for (auto miner : miners) {
-                miner->mem_pool.insert({ txID, (uint32_t)in });
+                miner->mem_pool.insert({ {txID, miner->mID}, (uint32_t)in });
             }
             txID++;
         }
@@ -128,7 +128,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
             if (miner->mem_pool.size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            miner->mem_pool.insert({ txID, (uint32_t)in });
+            miner->mem_pool.insert({ {txID, miner->mID}, (uint32_t)in });
         }
         txID++;
     }

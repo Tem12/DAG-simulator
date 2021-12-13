@@ -25,6 +25,7 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/random_access_index.hpp>
 #include <boost/multi_index_container.hpp>
+#include <boost/functional/hash.hpp>
 
 #include "est_time.h"
 
@@ -50,6 +51,8 @@ extern int n_blocks;
 extern int max_mp_size;
 extern bool end_simulation;
 
+int miners_finished = 0;
+
 // ===================================== Optimization experiment code =====================================
 // Extern fp from main.cpp
 //extern FILE *time_est_file;
@@ -57,7 +60,6 @@ extern bool end_simulation;
 //extern FILE *total_time_file;
 // ========================================================================================================
 
-// FIXME : temp variable
 int progress = 0; // progress in percent
 time_t last_progress_time = 0; // last progress print time
 
@@ -86,12 +88,43 @@ struct Block {
 };
 
 // uint_64 id, uint_32 fee
-typedef multi_index_container<Record,
-                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
-                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
-    Mempool;
+//typedef multi_index_container<Record,
+//                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
+//                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
+//    Mempool;
 
 enum miner_type { HONEST, MALICIOUS };
+
+// Hastab
+struct Key
+{
+    uint64_t tx_id;
+    int miner_id;
+
+    bool operator==(const Key &other) const
+    { return (tx_id == other.tx_id
+              && miner_id == other.miner_id);
+    }
+};
+
+struct KeyHasher
+{
+    std::size_t operator()(const Key& k) const
+    {
+        // Start with a hash value of 0    .
+        std::size_t seed = 0;
+
+        // Modify 'seed' by XORing and bit-shifting in
+        // one member of 'Key' after the other:
+        boost::hash_combine(seed, boost::hash_value(k.tx_id));
+        boost::hash_combine(seed, boost::hash_value(k.miner_id));
+
+        // Return the result.
+        return seed;
+    }
+};
+
+typedef std::unordered_map<Key, uint32_t, KeyHasher> Mempool;
 
 class Miner
 {
@@ -122,8 +155,8 @@ class Miner
             // for (const auto& [key, value] : depth_map) {
             // std::cout << "[" << key << ":" << value << "]";
             // }
-            std::cout << "Blocks:" << 10000 << " Depth:" << depth << " => " << std::setprecision(3)
-                      << (double)(10000 - depth) / 10000.0 * 100 << "%\n";
+            std::cout << "Blocks:" << n_blocks << " Depth:" << depth << " => " << std::setprecision(3)
+                      << (double)(n_blocks - depth) / (double)n_blocks * 100 << "%\n";
 
             // TODO: edit/separate printing each miner/block stats
 
@@ -199,23 +232,38 @@ class Miner
         // map_bcst
     }
 
+    static bool SortCmpAsc(std::pair<Key, uint32_t> &a, std::pair<Key, uint32_t> &b)
+    {
+        return a.second < b.second;
+    }
+
+    static bool SortCmpDesc(std::pair<Key, uint32_t> &a, std::pair<Key, uint32_t> &b)
+    {
+        return a.second > b.second;
+    }
+
+    std::vector<std::pair<Key, uint32_t>> getSortedMPAsc()
+    {
+        std::vector<std::pair<Key, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
+        std::sort(txs.begin(), txs.end(), SortCmpAsc);
+        return txs;
+    }
+
+    std::vector<std::pair<Key, uint32_t>> getSortedMPDesc()
+    {
+        std::vector<std::pair<Key, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
+        std::sort(txs.begin(), txs.end(), SortCmpDesc);
+        return txs;
+    }
+
+
     void RemoveMP(const int size)
     {
-        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
-        auto a = fee_index.begin();
-        auto b = fee_index.begin();
-        // b = b + size;
-        for (int i = 0; i < size; i++)
-            b++;
-        fee_index.erase(a, b);
+        std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPAsc();
 
-        // for (auto [it, i] = std::tuple{fee_index.begin(), 0}; i<how_many;
-        // it++, i++) {
-        //     fee_index.erase(it);
-        // }
-        // for (auto it=fee_index.rbegin(), int i=0; i<how_many; it++, i++) {
-        //     fee_index.erase(it);
-        // }
+        for (int i = 0; i < size; i++) {
+            mem_pool.erase(sortedMp[i].first);
+        }
     }
 
     virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s, int blockSize, int blockNumber)
@@ -248,20 +296,40 @@ class Miner
 
         if (this->type == HONEST) {
             // Honest miners
-            const auto &rand_index = mem_pool.get<2>();
 
             for (int i = 0; i < blockSize; i++) {
-                std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
-                uint64_t id = rand_index[distr(rng)].id;
-                uint32_t fee = rand_index[distr(rng)].fee;
+                //                std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
+
+                //                for (auto& it : mem_pool) {
+                //                    std::cout << it.first << ' '
+                //                              << it.second << std::endl;
+                //                }
+                //
+                //                printf("%\n", mem_pool.size() - 1);
+
+                //                int rand_index = distr(rng);
+
+                //                uint64_t id = (mem_pool.find(rand_index))->first;
+                //                uint32_t fee = (mem_pool.find(rand_index))->second;
+
+                // Get random tx by accessing begin. Randomness is created by custom key
+                // which is then hashed and consists of 2 elements: tx_id and miner_id
+                auto mem_pool_it = mem_pool.begin();
+
+                // TODO: add check if current size of mempool is less then block size
+                uint64_t id = mem_pool_it->first.tx_id;
+                uint32_t fee = mem_pool_it->second;
+
                 tmp_block.txn.push_back(Record{ id, fee });
                 abc[id].first = fee;
                 abc[id].second.push_back(std::tuple<int, int>(depth, mID));
+
                 if (this->mID == 0) {
                     tx[id] = true;
                 }
-                auto it = mem_pool.find(id);
-                mem_pool.erase(it);
+
+                //                auto it = mem_pool.find(id);
+                mem_pool.erase(mem_pool_it);
             }
             if (this->mID == 0) {
                 txnum += tmp_block.txn.size();
@@ -272,34 +340,20 @@ class Miner
             // }
         } else if (this->type == MALICIOUS) {
             // Malicious miners
-            Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
 
-            int i = 0;
-            for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
-                // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
-                tmp_block.txn.push_back(Record{ it->id, it->fee });
-                abc[it->id].first = it->fee;
-                abc[it->id].second.push_back(std::tuple<int, int>(depth, mID));
+            std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPDesc();
+            for (int i = 0; i < blockSize; i++) {
+                tmp_block.txn.push_back(Record{ sortedMp[i].first.tx_id, sortedMp[i].second });
+                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
+                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
+
+                // Mark that transaction has been processed (to count duplicates)
                 if (this->mID == 0) {
-                    tx[it->id] = true;
+                    tx[sortedMp[i].first.tx_id] = true;
                 }
-                // id_index.erase(it->id);
-                if (i >= 99)
-                    break; // max 100 transactions in block
-                i++;
-            }
 
-            if (this->mID == 0) {
-                txnum += tmp_block.txn.size();
-            }
-
-            // delete processed mined transactions in local mempool
-            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
-            for (auto &elem : tmp_block.txn) {
-                id_index.erase(elem.id);
-                //     if (this->mID == 0) {
-                //         tx[elem.id] = true;
-                //     }
+                // Remove processed transactions
+                mem_pool.erase(sortedMp[i].first);
             }
 
             // blocks_copy->push_back(tmp_block);
@@ -341,11 +395,15 @@ class Miner
             if (this->mID == 0) {
                 txnum += b.txn.size();
             }
-            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+
             for (auto &elem : b.txn) {
-                id_index.erase(elem.id);
-                if (this->mID == 0) {
-                    tx[elem.id] = true;
+                auto mempool_processed_tx = mem_pool.find({elem.id, this->mID});
+
+                if (mempool_processed_tx != mem_pool.end()) {
+                    mem_pool.erase(mempool_processed_tx);
+                    if (this->mID == 0) {
+                        tx[elem.id] = true;
+                    }
                 }
             }
             RelayChain(this, s, b, latency);
@@ -353,6 +411,15 @@ class Miner
           // RelayChain(from, s, blcks, b, latency);
           // RelayChain(this, s, b, latency);
           // }
+
+        // Check if all blocks were processed by all miners, if yes stop the simulation
+        if (b.id == n_blocks - 1) {
+            miners_finished++;
+
+            if (miners_finished == nextID) {
+                end_simulation = true;
+            }
+        }
     }
 
     virtual void RelayChain(Miner *from, CScheduler &s,
@@ -408,10 +475,6 @@ class Miner
                    ((double)this->mem_pool.size() / max_mp_size) * 100.0);
 
             last_progress_time = curr_time;
-
-            if (progress == 100) {
-                end_simulation = true;
-            }
 
             // ===================================== Optimization experiment code =====================================
             // Save simulation est time
