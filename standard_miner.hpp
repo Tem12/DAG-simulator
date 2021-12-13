@@ -51,6 +51,8 @@ extern int n_blocks;
 extern int max_mp_size;
 extern bool end_simulation;
 
+int miners_finished = 0;
+
 // ===================================== Optimization experiment code =====================================
 // Extern fp from main.cpp
 //extern FILE *time_est_file;
@@ -409,6 +411,15 @@ class Miner
           // RelayChain(from, s, blcks, b, latency);
           // RelayChain(this, s, b, latency);
           // }
+
+        // Check if all blocks were processed by all miners, if yes stop the simulation
+        if (b.id == n_blocks - 1) {
+            miners_finished++;
+
+            if (miners_finished == nextID) {
+                end_simulation = true;
+            }
+        }
     }
 
     virtual void RelayChain(Miner *from, CScheduler &s,
@@ -464,10 +475,6 @@ class Miner
                    ((double)this->mem_pool.size() / max_mp_size) * 100.0);
 
             last_progress_time = curr_time;
-
-            if (progress == 100) {
-                end_simulation = true;
-            }
 
             // ===================================== Optimization experiment code =====================================
             // Save simulation est time
