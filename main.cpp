@@ -17,15 +17,19 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 #include <random>
 #include <cstdint>
+#include <dirent.h>
 
 #include "standard_miner.hpp"
 
 #define TOTAL_HASHPOWER_EPS 0.000001 // max deviation of valid hashpower
+#define DATA_OUTPUT_DIR "outputs" // name of the directory for output files
+#define DATA_OUTPUT_MAX_RUN_ID 1000
 
 // FIXME : temp added to extern globally
 std::string config_file;
@@ -49,20 +53,32 @@ int blockSize = 0; // How many transactions contains each block
 
 int config_variant_id = 0;
 int run_id = 0;
+
+// Global vars for logging
+std::vector<Miner *> miners;
+int honest_miner_id = -1;
+int malicious_miner_id = -1;
+
 // ===================================== Optimization experiment code =====================================
 // Time estimation data, optimization_exp/time_est_{CFG_variant}_{RUN_ID}
-//std::string time_est_filename = "experiment_mempool_optimization/time_est_";
-//FILE *time_est_file;
+// std::string time_est_filename = "experiment_mempool_optimization/time_est_";
+// FILE *time_est_file;
 
 // Mempool fullness data, optimization_exp/mempool_sizes_{CFG_variant}_{RUN_ID}
-//std::string mempool_size_filename = "experiment_mempool_optimization/mempool_sizes_";
-//FILE *mempool_sizes_file;
+// std::string mempool_size_filename = "experiment_mempool_optimization/mempool_sizes_";
+// FILE *mempool_sizes_file;
 
 // Total time of running application data,
 // optimization_exp/total_time_{CFG_variant}_{RUN_ID}
-//std::string total_time_filename = "experiment_mempool_optimization/total_time_";
-//FILE *total_time_file;
+// std::string total_time_filename = "experiment_mempool_optimization/total_time_";
+// FILE *total_time_file;
 // ========================================================================================================
+
+// Simulation logging files
+// Progress of simulation, equal to stdout log
+FILE *progress_file = nullptr;
+FILE *mempool_stats_file = nullptr;
+FILE *data_stats_file = nullptr;
 
 static void Connect(Miner *m1, Miner *m2, double latency)
 {
@@ -92,7 +108,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
             auto in = fee_gen() * lambda;
             // int in = distr(rng);
             for (auto miner : miners) {
-                miner->mem_pool.insert({ {txID, miner->mID}, (uint32_t)in });
+                miner->mem_pool.insert({ { txID, miner->mID }, (uint32_t)in });
             }
             txID++;
         }
@@ -128,7 +144,7 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
             if (miner->mem_pool.size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            miner->mem_pool.insert({ {txID, miner->mID}, (uint32_t)in });
+            miner->mem_pool.insert({ { txID, miner->mID }, (uint32_t)in });
         }
         txID++;
     }
@@ -185,7 +201,7 @@ int run_simulation(boost::random::mt19937 &rng, std::vector<Miner *> &miners)
 
     simulator.serviceQueue();
 
-    miners[0]->PrintStats();
+    // miners[0]->PrintStats();
 
     // blocks_found.clear();
     // blocks_found.insert(blocks_found.begin(), miners.size(), 0);
@@ -265,13 +281,16 @@ int main(int argc, char **argv)
     rng.seed(rng_seed);
 
     // Validate config file
-    std::vector<Miner *> miners;
     if (vm.count("miner") == 0) {
         std::cout << "You must configure one or more miner in " << config_file << "\n";
         return 1;
     }
 
     double totalHashpower = 0.0;
+    int malicious_miners = 0;
+    int honest_miners = 0;
+    double malicious_hashpower = 0.0;
+    double honest_hashpower = 0.0;
 
     for (auto m : vm["miner"].as<std::vector<std::string>>()) {
         std::vector<std::string> v;
@@ -288,16 +307,27 @@ int main(int argc, char **argv)
         }
         if (v[1] == "honest") {
             miners.push_back(new Miner(hashpower, latency, HONEST, boost::bind(random_real, boost::ref(rng), _1, _2)));
+            honest_miners++;
+            honest_hashpower += hashpower;
+            if (honest_miner_id == -1) {
+                honest_miner_id = miners.back()->mID;
+            }
         } else if (v[1] == "malicious") {
             miners.push_back(
                 new Miner(hashpower, latency, MALICIOUS, boost::bind(random_real, boost::ref(rng), _1, _2)));
+            malicious_miners++;
+            malicious_hashpower += hashpower;
+            if (malicious_miner_id == -1) {
+                malicious_miner_id = miners.back()->mID;
+            }
         } else {
             std::cout << "Invalid miner description (can be either honest or malicious) - " << m << "\n";
             return EXIT_FAILURE;
         }
     }
 
-    // Summing all haspowers produce floating point error. To avoid this, TOTAL_HASHPOWER_EPS contains maximum correction
+    // Summing all haspowers produce floating point error. To avoid this, TOTAL_HASHPOWER_EPS contains maximum
+    // correction
     if ((totalHashpower - 1.0 > TOTAL_HASHPOWER_EPS) || (totalHashpower + 1.0 < TOTAL_HASHPOWER_EPS)) {
         std::cout << "Hashpower of all miner needs to be 100%" << std::endl;
         return EXIT_FAILURE;
@@ -321,53 +351,139 @@ int main(int argc, char **argv)
         Connect(miners[m1], miners[m2], latency);
     }
 
-    std::cout << "Simulating " << n_blocks << " blocks, default latency " << block_latency << "secs, ";
-    std::cout << "with " << miners.size() << " miners over " << n_runs << " runs\n";
-    if (vm.count("description")) {
-        std::cout << "Configuration: " << vm["description"].as<std::string>() << "\n";
-    }
+    //    std::cout << "Simulating " << n_blocks << " blocks, default latency " << block_latency << "secs, ";
+    //    std::cout << "with " << miners.size() << " miners over " << n_runs << " runs\n";
+    //    if (vm.count("description")) {
+    //        std::cout << "Configuration: " << vm["description"].as<std::string>() << "\n";
+    //    }
 
     // ===================================== Optimization experiment code =====================================
-//    time_est_filename.append(std::to_string(config_variant_id))
-//        .append("_")
-//        .append(std::to_string(run_id))
-//        .append(".csv");
-//
-//    mempool_size_filename.append(std::to_string(config_variant_id))
-//        .append("_")
-//        .append(std::to_string(run_id))
-//        .append(".csv");
-//
-//    total_time_filename.append(std::to_string(config_variant_id))
-//        .append("_")
-//        .append(std::to_string(run_id))
-//        .append(".csv");
-//
-//    time_est_file = fopen(time_est_filename.c_str(), "w");
-//    mempool_sizes_file = fopen(mempool_size_filename.c_str(), "w");
-//    total_time_file = fopen(total_time_filename.c_str(), "w");
-//
-//    if (time_est_file == nullptr) {
-//        std::cout << "Cannot open time_est_file for optimization experiment" << std::endl;
-//        return EXIT_FAILURE;
-//    }
-//
-//    if (mempool_sizes_file == nullptr) {
-//        std::cout << "Cannot open mempool_sizes_file for optimization experiment" << std::endl;
-//        return EXIT_FAILURE;
-//    }
+    //    time_est_filename.append(std::to_string(config_variant_id))
+    //        .append("_")
+    //        .append(std::to_string(run_id))
+    //        .append(".csv");
+    //
+    //    mempool_size_filename.append(std::to_string(config_variant_id))
+    //        .append("_")
+    //        .append(std::to_string(run_id))
+    //        .append(".csv");
+    //
+    //    total_time_filename.append(std::to_string(config_variant_id))
+    //        .append("_")
+    //        .append(std::to_string(run_id))
+    //        .append(".csv");
+    //
+    //    time_est_file = fopen(time_est_filename.c_str(), "w");
+    //    mempool_sizes_file = fopen(mempool_size_filename.c_str(), "w");
+    //    total_time_file = fopen(total_time_filename.c_str(), "w");
+    //
+    //    if (time_est_file == nullptr) {
+    //        std::cout << "Cannot open time_est_file for optimization experiment" << std::endl;
+    //        return EXIT_FAILURE;
+    //    }
+    //
+    //    if (mempool_sizes_file == nullptr) {
+    //        std::cout << "Cannot open mempool_sizes_file for optimization experiment" << std::endl;
+    //        return EXIT_FAILURE;
+    //    }
     // ========================================================================================================
+
+    int sim_run_id = -1;
+    char sim_run_id_str[5] = { 0 }; // number: XXXX\0
+
+    // Check for available output files
+    DIR *dir = opendir(DATA_OUTPUT_DIR);
+
+    if (dir == nullptr) {
+        std::filesystem::create_directory(DATA_OUTPUT_DIR);
+    } else {
+        closedir(dir);
+    }
+
+    for (int i = 0; i < DATA_OUTPUT_MAX_RUN_ID; i++) {
+        std::string search_filename = DATA_OUTPUT_DIR;
+        sprintf(sim_run_id_str, "%04d", i);
+        search_filename.append("/progress_").append(config_file).append("_").append(sim_run_id_str).append(".out");
+        if (access(search_filename.c_str(), F_OK) != 0) {
+            sim_run_id = i;
+            break;
+        }
+    }
+
+    if (sim_run_id == -1) {
+        std::cout << "Maximum number of output files for same config exceeded ("
+                  << std::to_string(DATA_OUTPUT_MAX_RUN_ID) << ")" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    // Convert int to string with padded zeroes
+    sprintf(sim_run_id_str, "%04d", sim_run_id);
+
+    // outputs/progress_{CFG}_{RUN_ID}.out
+    std::string progress_filename = "outputs/progress_";
+
+    // outputs/mempool_{CFG}_{RUN_ID}.csv
+    std::string mempool_stats_filename = "outputs/mempool_";
+
+    // outputs/data_{CFG}_{RUN_ID}.csv
+    std::string data_stats_filename = "outputs/data_";
+
+    progress_filename.append(config_file).append("_").append(sim_run_id_str).append(".out");
+    mempool_stats_filename.append(config_file).append("_").append(sim_run_id_str).append(".csv");
+    data_stats_filename.append(config_file).append("_").append(sim_run_id_str).append(".csv");
+
+    progress_file = fopen(progress_filename.c_str(), "w");
+    mempool_stats_file = fopen(mempool_stats_filename.c_str(), "w");
+    data_stats_file = fopen(data_stats_filename.c_str(), "w");
+
+    if (progress_file == nullptr) {
+        printf("Cannot open progress file\n");
+        return EXIT_FAILURE;
+    }
+
+    if (mempool_stats_file == nullptr) {
+        printf("Cannot open mempool stats file\n");
+        return EXIT_FAILURE;
+    }
+
+    if (data_stats_file == nullptr) {
+        printf("Cannot open data stats file\n");
+        return EXIT_FAILURE;
+    }
+
+    // Print simulation start
+    log_progress("Simulation %s_%s\n"
+                 "Config: %s\n"
+                 "Blocks: %d\n"
+                 "Malicious miners: %d (%.2lf%% power)\n"
+                 "Honest miners: %d (%.2lf%% power)\n"
+                 "Block latency: %.2lf secs\n"
+                 "Random seed: %d\n"
+                 "Max mempool size: %d txs\n"
+                 "Block size: %d txs\n"
+                 "Min. transaction generate speed: %.2lf secs\n"
+                 "Max. transaction generate speed: %.2lf secs\n"
+                 "Min. transaction generate size: %d\n"
+                 "Max. transaction generate size: %d\n"
+                 "========================================================\n",
+                 config_file.c_str(), sim_run_id_str, config_file.c_str(), n_blocks, malicious_miners,
+                 malicious_hashpower * 100, honest_miners, honest_hashpower * 100, block_latency, rng_seed, max_mp_size,
+                 blockSize, min_tx_gen_secs, max_tx_gen_secs, min_tx_gen_size, max_tx_gen_size);
+
+    // Create headers in csv files
+    log_mempool("MinerID,Progress,MempoolSize\n");
+    log_data_stats("TransactionID,Fee,BlockID,Depth,MinerID\n");
 
     // ========================================================
     // Print 0% progress
     time_t curr_time = time(nullptr);
     char time_str[26];
-    struct tm* tm_info;
+    struct tm *tm_info;
 
     tm_info = localtime(&curr_time);
 
     strftime(time_str, 26, "%m-%d %H:%M:%S", tm_info);
-    printf("[%s]\t0%%\n", time_str);
+    log_progress("[%s]\t0%%\n", time_str);
     // ========================================================
 
     // int best_chain_sum = 0;
@@ -408,16 +524,20 @@ int main(int argc, char **argv)
     // }
     // std::cout << "\n";
 
-    printf("Simulation duration: ");
+    log_progress("Simulation duration: ");
     auto time_diff = (time_t)difftime(time(nullptr), sim_start_time);
     print_diff_time(time_diff);
-    printf("\n");
+    log_progress("\n");
 
     // ===================================== Optimization experiment code =====================================
-//    fclose(time_est_file);
-//    fclose(mempool_sizes_file);
-//    fclose(total_time_file);
+    //    fclose(time_est_file);
+    //    fclose(mempool_sizes_file);
+    //    fclose(total_time_file);
     // ========================================================================================================
+
+    fclose(progress_file);
+    fclose(mempool_stats_file);
+    fclose(data_stats_file);
 
     return 0;
 }

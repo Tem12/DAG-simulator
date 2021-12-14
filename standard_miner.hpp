@@ -28,6 +28,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "est_time.h"
+#include "log.h"
 
 class Miner;
 class PeerInfo
@@ -51,13 +52,18 @@ extern int n_blocks;
 extern int max_mp_size;
 extern bool end_simulation;
 
+// Used for logging
+extern std::vector<Miner *> miners;
+extern int honest_miner_id;
+extern int malicious_miner_id;
+
 int miners_finished = 0;
 
 // ===================================== Optimization experiment code =====================================
 // Extern fp from main.cpp
-//extern FILE *time_est_file;
-//extern FILE *mempool_sizes_file;
-//extern FILE *total_time_file;
+// extern FILE *time_est_file;
+// extern FILE *mempool_sizes_file;
+// extern FILE *total_time_file;
 // ========================================================================================================
 
 int progress = 0; // progress in percent
@@ -88,7 +94,7 @@ struct Block {
 };
 
 // uint_64 id, uint_32 fee
-//typedef multi_index_container<Record,
+// typedef multi_index_container<Record,
 //                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
 //                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
 //    Mempool;
@@ -96,20 +102,18 @@ struct Block {
 enum miner_type { HONEST, MALICIOUS };
 
 // Hastab
-struct Key
-{
+struct Key {
     uint64_t tx_id;
     int miner_id;
 
     bool operator==(const Key &other) const
-    { return (tx_id == other.tx_id
-              && miner_id == other.miner_id);
+    {
+        return (tx_id == other.tx_id && miner_id == other.miner_id);
     }
 };
 
-struct KeyHasher
-{
-    std::size_t operator()(const Key& k) const
+struct KeyHasher {
+    std::size_t operator()(const Key &k) const
     {
         // Start with a hash value of 0    .
         std::size_t seed = 0;
@@ -134,82 +138,10 @@ class Miner
     std::shared_ptr<std::vector<Block>> blocks;
     Mempool mem_pool;
     miner_type type; // Miner can either honest or malicious
-    u_int64_t reward;
     u_int64_t balance;
-
-    int txnum;
-    std::map<uint32_t, bool> tx;
 
     int depth;
     // std::map<int, int> depth_map;
-
-    void PrintStats()
-    {
-        if (this->mID == 0) {
-            int fluke = 0;
-            int total = 0;
-            std::vector<int> em(nextID, 0);
-
-            std::cout << "Stats t_all:" << txnum << " t_dup:" << tx.size() << " => " << std::setprecision(3)
-                      << 100 - (((double)tx.size() / (double)txnum) * 100) << "%\n";
-            // for (const auto& [key, value] : depth_map) {
-            // std::cout << "[" << key << ":" << value << "]";
-            // }
-            std::cout << "Blocks:" << n_blocks << " Depth:" << depth << " => " << std::setprecision(3)
-                      << (double)(n_blocks - depth) / (double)n_blocks * 100 << "%\n";
-
-            // TODO: edit/separate printing each miner/block stats
-
-            std::ofstream myfile;
-            myfile.open(config_file.append(".details.txt"));
-
-            // std::cout << abc.size() << "\n";
-            // int i = 0;
-            for (auto const &[key, val] : abc) {
-                // myfile << i++ << "\n";
-                total += val.first;
-                if (val.second.size() > 1) {
-                    if (val.second.size() > 3)
-                        fluke++;
-                    myfile << key << " - [" << val.first << "] ";
-                    for (auto it = val.second.begin(); it != val.second.end(); ++it) {
-                        myfile << std::get<0>(*it) << ',' << std::get<1>(*it) << ' ';
-                        // payoff function
-                        /* split evenly distributed */
-                        // em[t] += val.first / val.second.size();
-                        /* only first come first serve */
-                    }
-
-                    int t = std::get<1>(*(val.second.begin()));
-                    em[t] += val.first;
-
-                    myfile << '\n';
-                } else {
-                    int t = std::get<1>(*val.second.data());
-                    em[t] += val.first;
-                }
-            }
-
-            std::cout << "[";
-            for (int e : em) {
-                std::cout << std::setprecision(3) << ((double)e / (double)total * 100.0) << "% ";
-            }
-            std::cout << "]" << std::endl;
-
-            std::cout << "fluke count " << fluke << std::endl;
-            // std::cout << total;
-            // for (auto it = abc.begin(); it != abc.end(); ++it) {
-            //     myfile << it->first << "- ";
-            //     for (auto it2 = it->second.begin(); it2 != it->second.end();
-            //     ++it2) {
-            //         myfile << std::get<0>(*it2) << ',' << std::get<1>(*it2)
-            //         << ' ';
-            //     }
-            //     myfile << '\n';
-            // }
-            myfile.close();
-        }
-    }
 
     // Return a random double in the range passed.
     typedef boost::function<double(double, double)> JitterFunction;
@@ -219,9 +151,7 @@ class Miner
     {
         // best_chain = std::make_shared<std::vector<int>>();
         blocks = std::make_shared<std::vector<Block>>();
-        reward = 0;
         balance = 0;
-        txnum = 0;
         depth = 0;
     }
 
@@ -255,7 +185,6 @@ class Miner
         std::sort(txs.begin(), txs.end(), SortCmpDesc);
         return txs;
     }
-
 
     void RemoveMP(const int size)
     {
@@ -321,36 +250,23 @@ class Miner
                 uint32_t fee = mem_pool_it->second;
 
                 tmp_block.txn.push_back(Record{ id, fee });
-                abc[id].first = fee;
-                abc[id].second.push_back(std::tuple<int, int>(depth, mID));
 
-                if (this->mID == 0) {
-                    tx[id] = true;
-                }
+                log_data_stats("%lld,%u,%d,%d,%d\n", id, fee, tmp_block.id, tmp_block.depth, this->mID);
 
                 //                auto it = mem_pool.find(id);
                 mem_pool.erase(mem_pool_it);
             }
-            if (this->mID == 0) {
-                txnum += tmp_block.txn.size();
-            }
-
-            // if (this->mID == 0) {
-            //     txnum += tmp_block.txn.size();
-            // }
         } else if (this->type == MALICIOUS) {
             // Malicious miners
 
             std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPDesc();
             for (int i = 0; i < blockSize; i++) {
                 tmp_block.txn.push_back(Record{ sortedMp[i].first.tx_id, sortedMp[i].second });
-                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
-                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
+//                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
+//                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
 
-                // Mark that transaction has been processed (to count duplicates)
-                if (this->mID == 0) {
-                    tx[sortedMp[i].first.tx_id] = true;
-                }
+                log_data_stats("%lld,%u,%d,%d,%d\n", sortedMp[i].first.tx_id, sortedMp[i].second, tmp_block.id,
+                               tmp_block.depth, this->mID);
 
                 // Remove processed transactions
                 mem_pool.erase(sortedMp[i].first);
@@ -391,19 +307,13 @@ class Miner
 
         if (map_bcst.find(b.id) == map_bcst.end()) { // not found
             map_bcst[b.id] = true;
-            // update local mempool
-            if (this->mID == 0) {
-                txnum += b.txn.size();
-            }
 
+            // update local mempool
             for (auto &elem : b.txn) {
-                auto mempool_processed_tx = mem_pool.find({elem.id, this->mID});
+                auto mempool_processed_tx = mem_pool.find({ elem.id, this->mID });
 
                 if (mempool_processed_tx != mem_pool.end()) {
                     mem_pool.erase(mempool_processed_tx);
-                    if (this->mID == 0) {
-                        tx[elem.id] = true;
-                    }
                 }
             }
             RelayChain(this, s, b, latency);
@@ -458,33 +368,49 @@ class Miner
 
             // ========================================================
             char time_str[26];
-            struct tm* tm_info;
+            struct tm *tm_info;
 
             tm_info = localtime(&curr_time);
 
             strftime(time_str, 26, "%m-%d %H:%M:%S", tm_info);
-            printf("[%s]\t", time_str);
+            log_progress("[%s]\t", time_str);
             // ========================================================
 
-            printf("%d%%\tBlock %d\t", progress, b.id);
+            log_progress("%d%%\tBlock %d\t", progress, b.id);
             auto time_diff = (time_t)(difftime(curr_time, last_progress_time)) * (100 - progress);
             print_diff_time(time_diff);
 
-            // Print mempool fullness for 1st miner
-            printf("\tMiner[%d] - %ld (%.2f%%)\n", this->mID, this->mem_pool.size(),
-                   ((double)this->mem_pool.size() / max_mp_size) * 100.0);
+            // Print mempool fullness for 1st honest miner (if exists)
+            if (honest_miner_id != -1) {
+                Miner *honest_miner = miners.at(honest_miner_id);
+                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id, honest_miner->mem_pool.size(),
+                             ((double)honest_miner->mem_pool.size() / max_mp_size) * 100.0);
+            }
+
+            if (malicious_miner_id != -1) {
+                // Print mempool fullness for 1st malicious miner (if exists)
+                Miner *malicious_miner = miners.at(malicious_miner_id);
+                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id, malicious_miner->mem_pool.size(),
+                             ((double)malicious_miner->mem_pool.size() / max_mp_size) * 100.0);
+            }
+
+            log_progress("\n");
 
             last_progress_time = curr_time;
 
+            for (auto miner : miners) {
+                log_mempool("%d,%d,%d\n", miner->mID, progress, miner->mem_pool.size());
+            }
+
             // ===================================== Optimization experiment code =====================================
             // Save simulation est time
-//            fprintf(time_est_file, "%d, %ld\n", progress, time_diff);
+            //            fprintf(time_est_file, "%d, %ld\n", progress, time_diff);
             // ========================================================================================================
         }
 
         // ===================================== Optimization experiment code =====================================
         // Save current mempool fullness for each node
-//        fprintf(mempool_sizes_file, "%d, %lu\n", this->mID, mem_pool.size());
+        //        fprintf(mempool_sizes_file, "%d, %lu\n", this->mID, mem_pool.size());
         // ========================================================================================================
 
         // FIXME: End simulation is properly computed yet, this temporary solution will stop simulation on last block
@@ -530,10 +456,8 @@ class Miner
     // std::map<int, std::map<int, bool>> adjTable;
     std::map<int, bool> map_bcst;
     static int nextID;
-    static std::map<uint64_t, std::pair<int, std::vector<std::tuple<int, int>>>> abc;
 };
 
 int Miner::nextID = 0;
-std::map<uint64_t, std::pair<int, std::vector<std::tuple<int, int>>>> Miner::abc;
 
 #endif /* STANDARD_MINER_H */
