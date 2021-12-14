@@ -94,41 +94,12 @@ struct Block {
 };
 
 // uint_64 id, uint_32 fee
-// typedef multi_index_container<Record,
-//                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
-//                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
-//    Mempool;
+typedef multi_index_container<Record,
+                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
+                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
+    Mempool;
 
 enum miner_type { HONEST, MALICIOUS };
-
-// Hastab
-struct Key {
-    uint64_t tx_id;
-    int miner_id;
-
-    bool operator==(const Key &other) const
-    {
-        return (tx_id == other.tx_id && miner_id == other.miner_id);
-    }
-};
-
-struct KeyHasher {
-    std::size_t operator()(const Key &k) const
-    {
-        // Start with a hash value of 0    .
-        std::size_t seed = 0;
-
-        // Modify 'seed' by XORing and bit-shifting in
-        // one member of 'Key' after the other:
-        boost::hash_combine(seed, boost::hash_value(k.tx_id));
-        boost::hash_combine(seed, boost::hash_value(k.miner_id));
-
-        // Return the result.
-        return seed;
-    }
-};
-
-typedef std::unordered_map<Key, uint32_t, KeyHasher> Mempool;
 
 class Miner
 {
@@ -162,37 +133,15 @@ class Miner
         // map_bcst
     }
 
-    static bool SortCmpAsc(std::pair<Key, uint32_t> &a, std::pair<Key, uint32_t> &b)
-    {
-        return a.second < b.second;
-    }
-
-    static bool SortCmpDesc(std::pair<Key, uint32_t> &a, std::pair<Key, uint32_t> &b)
-    {
-        return a.second > b.second;
-    }
-
-    std::vector<std::pair<Key, uint32_t>> getSortedMPAsc()
-    {
-        std::vector<std::pair<Key, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
-        std::sort(txs.begin(), txs.end(), SortCmpAsc);
-        return txs;
-    }
-
-    std::vector<std::pair<Key, uint32_t>> getSortedMPDesc()
-    {
-        std::vector<std::pair<Key, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
-        std::sort(txs.begin(), txs.end(), SortCmpDesc);
-        return txs;
-    }
-
     void RemoveMP(const int size)
     {
-        std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPAsc();
-
-        for (int i = 0; i < size; i++) {
-            mem_pool.erase(sortedMp[i].first);
-        }
+        Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
+        auto a = fee_index.begin();
+        auto b = fee_index.begin();
+        // b = b + size;
+        for (int i = 0; i < size; i++)
+            b++;
+        fee_index.erase(a, b);
     }
 
     virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s, int blockSize, int blockNumber)
@@ -225,51 +174,43 @@ class Miner
 
         if (this->type == HONEST) {
             // Honest miners
+            const auto &rand_index = mem_pool.get<2>();
 
             for (int i = 0; i < blockSize; i++) {
-                //                std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
-
-                //                for (auto& it : mem_pool) {
-                //                    std::cout << it.first << ' '
-                //                              << it.second << std::endl;
-                //                }
-                //
-                //                printf("%\n", mem_pool.size() - 1);
-
-                //                int rand_index = distr(rng);
-
-                //                uint64_t id = (mem_pool.find(rand_index))->first;
-                //                uint32_t fee = (mem_pool.find(rand_index))->second;
-
-                // Get random tx by accessing begin. Randomness is created by custom key
-                // which is then hashed and consists of 2 elements: tx_id and miner_id
-                auto mem_pool_it = mem_pool.begin();
-
-                // TODO: add check if current size of mempool is less then block size
-                uint64_t id = mem_pool_it->first.tx_id;
-                uint32_t fee = mem_pool_it->second;
-
-                tmp_block.txn.push_back(Record{ id, fee });
+                std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
+                uint64_t id = rand_index[distr(rng)].id;
+                uint32_t fee = rand_index[distr(rng)].fee;
+                tmp_block.txn.push_back({Record{ id, fee }});
 
                 log_data_stats("%lld,%u,%d,%d,%d\n", id, fee, tmp_block.id, tmp_block.depth, this->mID);
 
-                //                auto it = mem_pool.find(id);
-                mem_pool.erase(mem_pool_it);
+                auto it = mem_pool.find(id);
+                mem_pool.erase(it);
             }
         } else if (this->type == MALICIOUS) {
             // Malicious miners
 
-            std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPDesc();
-            for (int i = 0; i < blockSize; i++) {
-                tmp_block.txn.push_back(Record{ sortedMp[i].first.tx_id, sortedMp[i].second });
-//                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
-//                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
+            Mempool::nth_index<1>::type &fee_index = mem_pool.get<1>();
 
-                log_data_stats("%lld,%u,%d,%d,%d\n", sortedMp[i].first.tx_id, sortedMp[i].second, tmp_block.id,
+            int i = 0;
+            for (auto it = fee_index.rbegin(); it != fee_index.rend(); it++) {
+                // std::cout << "[" << it->id << ",fee/" << it->fee << "] ";
+                tmp_block.txn.push_back({Record{ it->id, it->fee }});
+                // id_index.erase(it->id);
+                if (i >= blockSize - 1)
+                    break; // max 100 transactions in block
+                i++;
+            }
+
+            // delete processed mined transactions in local mempool
+            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
+            for (auto &elem : tmp_block.txn) {
+                log_data_stats("%lld,%u,%d,%d,%d\n", elem.id, elem.fee, tmp_block.id,
                                tmp_block.depth, this->mID);
-
-                // Remove processed transactions
-                mem_pool.erase(sortedMp[i].first);
+                id_index.erase(elem.id);
+                //     if (this->mID == 0) {
+                //         tx[elem.id] = true;
+                //     }
             }
 
             // blocks_copy->push_back(tmp_block);
@@ -307,14 +248,9 @@ class Miner
 
         if (map_bcst.find(b.id) == map_bcst.end()) { // not found
             map_bcst[b.id] = true;
-
-            // update local mempool
+            Mempool::nth_index<0>::type &id_index = mem_pool.get<0>();
             for (auto &elem : b.txn) {
-                auto mempool_processed_tx = mem_pool.find({ elem.id, this->mID });
-
-                if (mempool_processed_tx != mem_pool.end()) {
-                    mem_pool.erase(mempool_processed_tx);
-                }
+                id_index.erase(elem.id);
             }
             RelayChain(this, s, b, latency);
         } // else -> found
@@ -390,7 +326,8 @@ class Miner
             if (malicious_miner_id != -1) {
                 // Print mempool fullness for 1st malicious miner (if exists)
                 Miner *malicious_miner = miners.at(malicious_miner_id);
-                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id, malicious_miner->mem_pool.size(),
+                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id,
+                             malicious_miner->mem_pool.size(),
                              ((double)malicious_miner->mem_pool.size() / max_mp_size) * 100.0);
             }
 
