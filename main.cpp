@@ -108,7 +108,8 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
             auto in = fee_gen() * lambda;
             // int in = distr(rng);
             for (auto miner : miners) {
-                miner->mem_pool.insert({ { txID, miner->mID }, (uint32_t)in });
+                auto htab_it = htab_lookup_add(miner->mem_pool, { .minerID = miner->mID, .txID = txID });
+                htab_iterator_set_value(htab_it, (uint32_t)in);
             }
             txID++;
         }
@@ -141,10 +142,11 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
         // int in = distr(rng);
         auto in = fee_gen() * lambda;
         for (auto miner : miners) {
-            if (miner->mem_pool.size() + txsz > max_mp_size) {
+            if (htab_size(miner->mem_pool) + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            miner->mem_pool.insert({ { txID, miner->mID }, (uint32_t)in });
+            auto htab_it = htab_lookup_add(miner->mem_pool, { .minerID = miner->mID, .txID = txID });
+            htab_iterator_set_value(htab_it, (uint32_t)in);
         }
         txID++;
     }
@@ -524,6 +526,11 @@ int main(int argc, char **argv)
     // }
     // std::cout << "\n";
 
+    // Clear miners mempools
+    for (auto miner : miners) {
+        htab_free(miner->mem_pool);
+    }
+
     log_progress("Simulation duration: ");
     auto time_diff = (time_t)difftime(time(nullptr), sim_start_time);
     print_diff_time(time_diff);
@@ -539,5 +546,34 @@ int main(int argc, char **argv)
     fclose(mempool_stats_file);
     fclose(data_stats_file);
 
-    return 0;
+    return EXIT_SUCCESS;
+}
+
+void sim_err_exit_out_of_tx(Miner *miner)
+{
+    log_progress("========================================================\n");
+    log_progress("Simulation error, taking snapshot of miners mempools:\n");
+    log_progress("============================ Start of snapshot ============================\n");
+    log_progress("MinerID\tMempoolSize\n");
+    for (auto single_miner : miners) {
+        log_progress("%d\t%ld\n", single_miner->mID, htab_size(single_miner->mem_pool));
+    }
+    log_progress("============================= End of snapshot =============================\n");
+    log_progress("Simulation error: Miner[%d] was chosen to generate block but has run out of transactions\n",
+                 miner->mID);
+    log_progress("Miner[%d] - %s with %.2lf%% hashpower and block latency %.2lf secs\n", miner->mID,
+                 miner->type == HONEST ? "Honest" : "Malicious", miner->GetHashFraction() * 100,
+                 miner->GetBlockLatency());
+
+    // Clear miners mempools
+    for (auto single_miner: miners) {
+        htab_free(single_miner->mem_pool);
+    }
+
+    // Close logging files
+    fclose(progress_file);
+    fclose(mempool_stats_file);
+    fclose(data_stats_file);
+
+    exit(EXIT_FAILURE);
 }

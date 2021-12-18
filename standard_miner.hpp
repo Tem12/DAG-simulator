@@ -29,6 +29,7 @@
 
 #include "est_time.h"
 #include "log.h"
+#include "htab.h"
 
 class Miner;
 class PeerInfo
@@ -56,6 +57,9 @@ extern bool end_simulation;
 extern std::vector<Miner *> miners;
 extern int honest_miner_id;
 extern int malicious_miner_id;
+
+// Used for error exit simulation
+extern void sim_err_exit_out_of_tx(Miner *miner);
 
 int miners_finished = 0;
 
@@ -128,7 +132,7 @@ struct KeyHasher {
     }
 };
 
-typedef std::unordered_map<Key, uint32_t, KeyHasher> Mempool;
+typedef htab_t *Mempool;
 
 class Miner
 {
@@ -150,6 +154,7 @@ class Miner
         : hash_fraction(_hash_fraction), type(_type), block_latency(_block_latency), jitter_func(_func), mID(nextID++)
     {
         // best_chain = std::make_shared<std::vector<int>>();
+        mem_pool = htab_init((size_t)(max_mp_size));
         blocks = std::make_shared<std::vector<Block>>();
         balance = 0;
         depth = 0;
@@ -162,36 +167,53 @@ class Miner
         // map_bcst
     }
 
-    static bool SortCmpAsc(std::pair<Key, uint32_t> &a, std::pair<Key, uint32_t> &b)
+    static bool SortCmpAsc(htab_item *a, htab_item *b)
     {
-        return a.second < b.second;
+        return a->data < b->data;
     }
 
-    static bool SortCmpDesc(std::pair<Key, uint32_t> &a, std::pair<Key, uint32_t> &b)
+    static bool SortCmpDesc(htab_item *a, htab_item *b)
     {
-        return a.second > b.second;
+        return a->data > b->data;
     }
 
-    std::vector<std::pair<Key, uint32_t>> getSortedMPAsc()
+    std::vector<htab_item *> getSortedMPAsc()
     {
-        std::vector<std::pair<Key, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
+        size_t mem_pool_size = htab_size(mem_pool);
+        std::vector<htab_item *> txs(mem_pool_size, nullptr);
+
+        htab_iterator it = htab_begin(mem_pool);
+        for (int i = 0; i < mem_pool_size; i++) {
+            txs[i] = (it.ptr);
+            it = htab_iterator_next(it);
+        }
+
         std::sort(txs.begin(), txs.end(), SortCmpAsc);
         return txs;
     }
 
-    std::vector<std::pair<Key, uint32_t>> getSortedMPDesc()
+    std::vector<htab_item *> getSortedMPDesc()
     {
-        std::vector<std::pair<Key, uint32_t>> txs(mem_pool.begin(), mem_pool.end());
+        size_t mem_pool_size = htab_size(mem_pool);
+        std::vector<htab_item *> txs(mem_pool_size, nullptr);
+
+        htab_iterator it = htab_begin(mem_pool);
+        for (int i = 0; i < mem_pool_size; i++) {
+            txs[i] = it.ptr;
+            it = htab_iterator_next(it);
+        }
+
         std::sort(txs.begin(), txs.end(), SortCmpDesc);
         return txs;
     }
 
     void RemoveMP(const int size)
     {
-        std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPAsc();
+        std::vector<htab_item *> sortedMp = getSortedMPAsc();
 
         for (int i = 0; i < size; i++) {
-            mem_pool.erase(sortedMp[i].first);
+            auto htab_it = htab_find(mem_pool, sortedMp[i]->key);
+            htab_erase(mem_pool, htab_it);
         }
     }
 
@@ -227,8 +249,7 @@ class Miner
             // Honest miners
 
             for (int i = 0; i < blockSize; i++) {
-                //                std::uniform_int_distribution<> distr(0, mem_pool.size() - 1);
-
+                std::uniform_int_distribution<> distr(0, (int) mem_pool->arr_size - 1);
                 //                for (auto& it : mem_pool) {
                 //                    std::cout << it.first << ' '
                 //                              << it.second << std::endl;
@@ -243,33 +264,38 @@ class Miner
 
                 // Get random tx by accessing begin. Randomness is created by custom key
                 // which is then hashed and consists of 2 elements: tx_id and miner_id
-                auto mem_pool_it = mem_pool.begin();
+                auto mem_pool_it = htab_find_closest(mem_pool, distr(rng));
 
-                // TODO: add check if current size of mempool is less then block size
-                uint64_t id = mem_pool_it->first.tx_id;
-                uint32_t fee = mem_pool_it->second;
+                if (!htab_iterator_valid(mem_pool_it)) {
+                    // Invalid transaction, stop the simulation
+                    sim_err_exit_out_of_tx(this);
+                }
+
+                uint64_t id = mem_pool_it.ptr->key_content.txID;
+                uint32_t fee = mem_pool_it.ptr->data;
 
                 tmp_block.txn.push_back(Record{ id, fee });
 
                 log_data_stats("%lld,%u,%d,%d,%d\n", id, fee, tmp_block.id, tmp_block.depth, this->mID);
 
                 //                auto it = mem_pool.find(id);
-                mem_pool.erase(mem_pool_it);
+                htab_erase(mem_pool, mem_pool_it);
             }
         } else if (this->type == MALICIOUS) {
             // Malicious miners
 
-            std::vector<std::pair<Key, uint32_t>> sortedMp = getSortedMPDesc();
+            std::vector<htab_item *> sortedMp = getSortedMPDesc();
             for (int i = 0; i < blockSize; i++) {
-                tmp_block.txn.push_back(Record{ sortedMp[i].first.tx_id, sortedMp[i].second });
-//                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
-//                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
+                tmp_block.txn.push_back(Record{ sortedMp[i]->key_content.txID, sortedMp[i]->data });
+                //                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
+                //                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
 
-                log_data_stats("%lld,%u,%d,%d,%d\n", sortedMp[i].first.tx_id, sortedMp[i].second, tmp_block.id,
+                log_data_stats("%lld,%u,%d,%d,%d\n", sortedMp[i]->key_content.txID, sortedMp[i]->data, tmp_block.id,
                                tmp_block.depth, this->mID);
 
                 // Remove processed transactions
-                mem_pool.erase(sortedMp[i].first);
+                auto it = htab_find(mem_pool, sortedMp[i]->key);
+                htab_erase(mem_pool, it);
             }
 
             // blocks_copy->push_back(tmp_block);
@@ -310,10 +336,10 @@ class Miner
 
             // update local mempool
             for (auto &elem : b.txn) {
-                auto mempool_processed_tx = mem_pool.find({ elem.id, this->mID });
+                auto mempool_processed_tx_it = htab_find(mem_pool, {.minerID = this->mID, .txID = elem.id});
 
-                if (mempool_processed_tx != mem_pool.end()) {
-                    mem_pool.erase(mempool_processed_tx);
+                if (htab_iterator_valid(mempool_processed_tx_it)) {
+                    htab_erase(mem_pool, mempool_processed_tx_it);
                 }
             }
             RelayChain(this, s, b, latency);
@@ -356,7 +382,6 @@ class Miner
         }
 
         // TODO: b.id is not synced, some block can occur lately than some fewer (eg. 22 before 20)
-        // TODO : parametrize printing update stats
         if (from->mID == 0 && (b.id + 1) * 100 / n_blocks > progress) {
             progress++;
 
@@ -383,15 +408,16 @@ class Miner
             // Print mempool fullness for 1st honest miner (if exists)
             if (honest_miner_id != -1) {
                 Miner *honest_miner = miners.at(honest_miner_id);
-                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id, honest_miner->mem_pool.size(),
-                             ((double)honest_miner->mem_pool.size() / max_mp_size) * 100.0);
+                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id, htab_size(honest_miner->mem_pool),
+                             ((double)htab_size(honest_miner->mem_pool) / max_mp_size) * 100.0);
             }
 
             if (malicious_miner_id != -1) {
                 // Print mempool fullness for 1st malicious miner (if exists)
                 Miner *malicious_miner = miners.at(malicious_miner_id);
-                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id, malicious_miner->mem_pool.size(),
-                             ((double)malicious_miner->mem_pool.size() / max_mp_size) * 100.0);
+                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id,
+                             htab_size(malicious_miner->mem_pool),
+                             ((double)htab_size(malicious_miner->mem_pool) / max_mp_size) * 100.0);
             }
 
             log_progress("\n");
@@ -399,7 +425,7 @@ class Miner
             last_progress_time = curr_time;
 
             for (auto miner : miners) {
-                log_mempool("%d,%d,%d\n", miner->mID, progress, miner->mem_pool.size());
+                log_mempool("%d,%d,%ld\n", miner->mID, progress, htab_size(miner->mem_pool));
             }
 
             // ===================================== Optimization experiment code =====================================
@@ -413,7 +439,6 @@ class Miner
         //        fprintf(mempool_sizes_file, "%d, %lu\n", this->mID, mem_pool.size());
         // ========================================================================================================
 
-        // FIXME: End simulation is properly computed yet, this temporary solution will stop simulation on last block
         //        if (b.id == n_blocks - 1) {
         //            printf("%ld\n", (time_t)difftime(time(nullptr), sim_start_time));
         //
@@ -438,6 +463,11 @@ class Miner
     const double GetHashFraction() const
     {
         return hash_fraction;
+    }
+
+    const double GetBlockLatency() const
+    {
+        return block_latency;
     }
     // std::vector<int> GetBestChain() const { return *best_chain; }
 

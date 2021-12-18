@@ -6,4 +6,4 @@ CFLAGS=-O2
 # CFLAGS=-g -ggdb
 
 scheduler: main.cpp scheduler.cpp
-	clang++ -std=c++17 -I/usr/local/include -L/usr/local/lib $(CFLAGS) -o mining_simulator main.cpp scheduler.cpp est_time.cpp log.cpp $(BOOST_LIBS)
+	clang++ -std=c++17 -I/usr/local/include -L/usr/local/lib $(CFLAGS) -o mining_simulator main.cpp scheduler.cpp est_time.cpp log.cpp htab.cpp $(BOOST_LIBS)
