@@ -164,7 +164,6 @@ class Miner
     {
         peers.push_back(PeerInfo(peer, -1, latency));
         // adjTable[(peer->mID)] = std::map<int, bool>{};
-        // map_bcst
     }
 
     static bool SortCmpAsc(htab_item *a, htab_item *b)
@@ -226,7 +225,7 @@ class Miner
         // chain_copy->push_back(blockNumber);
         // best_chain = chain_copy;
         balance++;
-        map_bcst[blockNumber] = true;
+        block_bdcast[blockNumber] = true;
         // Transactions in block
         // auto blocks_copy =
         // std::make_shared<std::vector<Block>>(blocks->begin(),
@@ -249,7 +248,7 @@ class Miner
             // Honest miners
 
             for (int i = 0; i < blockSize; i++) {
-                std::uniform_int_distribution<> distr(0, (int) mem_pool->arr_size - 1);
+                std::uniform_int_distribution<> distr(0, (int)mem_pool->arr_size - 1);
                 //                for (auto& it : mem_pool) {
                 //                    std::cout << it.first << ' '
                 //                              << it.second << std::endl;
@@ -286,6 +285,10 @@ class Miner
 
             std::vector<htab_item *> sortedMp = getSortedMPDesc();
             for (int i = 0; i < blockSize; i++) {
+                if (i >= sortedMp.size()) {
+                    sim_err_exit_out_of_tx(this);
+                }
+
                 tmp_block.txn.push_back(Record{ sortedMp[i]->key_content.txID, sortedMp[i]->data });
                 //                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
                 //                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
@@ -331,12 +334,12 @@ class Miner
         }
         // depth_map[b.id] = b.depth;
 
-        if (map_bcst.find(b.id) == map_bcst.end()) { // not found
-            map_bcst[b.id] = true;
+        if (!block_bdcast[b.id]) { // not found
+            block_bdcast[b.id] = true;
 
             // update local mempool
             for (auto &elem : b.txn) {
-                auto mempool_processed_tx_it = htab_find(mem_pool, {.minerID = this->mID, .txID = elem.id});
+                auto mempool_processed_tx_it = htab_find(mem_pool, { .minerID = this->mID, .txID = elem.id });
 
                 if (htab_iterator_valid(mempool_processed_tx_it)) {
                     htab_erase(mem_pool, mempool_processed_tx_it);
@@ -408,7 +411,8 @@ class Miner
             // Print mempool fullness for 1st honest miner (if exists)
             if (honest_miner_id != -1) {
                 Miner *honest_miner = miners.at(honest_miner_id);
-                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id, htab_size(honest_miner->mem_pool),
+                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id,
+                             htab_size(honest_miner->mem_pool),
                              ((double)htab_size(honest_miner->mem_pool) / max_mp_size) * 100.0);
             }
 
@@ -484,7 +488,7 @@ class Miner
     // std::vector<std::vector<int>> adjTable;
     // std::vector<int> adjTable;
     // std::map<int, std::map<int, bool>> adjTable;
-    std::map<int, bool> map_bcst;
+    bool *block_bdcast = new bool[n_blocks]{ false };
     static int nextID;
 };
 
