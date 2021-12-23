@@ -31,8 +31,8 @@
 #define DATA_OUTPUT_DIR "outputs" // name of the directory for output files
 #define DATA_OUTPUT_MAX_RUN_ID 1000
 
-// FIXME : temp added to extern globally
-std::string config_file;
+std::string config_file_path;
+std::string config_filename;
 time_t sim_start_time;
 int n_blocks = 0;
 bool end_simulation = false;
@@ -248,7 +248,7 @@ int main(int argc, char **argv)
         "run_id", po::value<int>(&run_id)->default_value(0),
         "run id for optimization experiment")("config_variant_id", po::value<int>(&config_variant_id)->default_value(0),
                                               "config id for optimization experiment")(
-        "config", po::value<std::string>(&config_file)->default_value("mining.cfg"), "Mining config filename");
+        "config", po::value<std::string>(&config_file_path)->default_value("mining.cfg"), "Mining config filename");
     po::variables_map vm;
 
     po::options_description config("Mining config file options");
@@ -259,9 +259,9 @@ int main(int argc, char **argv)
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    std::ifstream f(config_file.c_str());
+    std::ifstream f(config_file_path.c_str());
     if (!f) {
-        std::cout << "Cannot open config file: " << config_file << std::endl;
+        std::cout << "Cannot open config file: " << config_file_path << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
 
     // Validate config file
     if (vm.count("miner") == 0) {
-        std::cout << "You must configure one or more miner in " << config_file << "\n";
+        std::cout << "You must configure one or more miner in " << config_file_path << "\n";
         return 1;
     }
 
@@ -390,6 +390,15 @@ int main(int argc, char **argv)
     //    }
     // ========================================================================================================
 
+    // Get config filename from config path
+    size_t config_filename_pos = config_file_path.find_last_of('/');
+    if (config_filename_pos == std::string::npos) {
+        config_filename = config_file_path;
+    }
+    else {
+        config_filename = config_file_path.substr(config_filename_pos + 1);
+    }
+
     int sim_run_id = -1;
     char sim_run_id_str[5] = { 0 }; // number: XXXX\0
 
@@ -405,7 +414,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < DATA_OUTPUT_MAX_RUN_ID; i++) {
         std::string search_filename = DATA_OUTPUT_DIR;
         sprintf(sim_run_id_str, "%04d", i);
-        search_filename.append("/progress_").append(config_file).append("_").append(sim_run_id_str).append(".out");
+        search_filename.append("/progress_").append(config_filename).append("_").append(sim_run_id_str).append(".out");
         if (access(search_filename.c_str(), F_OK) != 0) {
             sim_run_id = i;
             break;
@@ -430,9 +439,9 @@ int main(int argc, char **argv)
     // outputs/data_{CFG}_{RUN_ID}.csv
     std::string data_stats_filename = "outputs/data_";
 
-    progress_filename.append(config_file).append("_").append(sim_run_id_str).append(".out");
-    mempool_stats_filename.append(config_file).append("_").append(sim_run_id_str).append(".csv");
-    data_stats_filename.append(config_file).append("_").append(sim_run_id_str).append(".csv");
+    progress_filename.append(config_filename).append("_").append(sim_run_id_str).append(".out");
+    mempool_stats_filename.append(config_filename).append("_").append(sim_run_id_str).append(".csv");
+    data_stats_filename.append(config_filename).append("_").append(sim_run_id_str).append(".csv");
 
     progress_file = fopen(progress_filename.c_str(), "w");
     mempool_stats_file = fopen(mempool_stats_filename.c_str(), "w");
@@ -468,7 +477,7 @@ int main(int argc, char **argv)
                  "Min. transaction generate size: %d\n"
                  "Max. transaction generate size: %d\n"
                  "========================================================\n",
-                 config_file.c_str(), sim_run_id_str, config_file.c_str(), n_blocks, malicious_miners,
+                 config_filename.c_str(), sim_run_id_str, std::filesystem::canonical(std::filesystem::absolute(config_file_path)).c_str(), n_blocks, malicious_miners,
                  malicious_hashpower * 100, honest_miners, honest_hashpower * 100, block_latency, rng_seed, max_mp_size,
                  blockSize, min_tx_gen_secs, max_tx_gen_secs, min_tx_gen_size, max_tx_gen_size);
 

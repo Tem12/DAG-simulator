@@ -46,8 +46,6 @@ class PeerInfo
 
 using namespace boost::multi_index;
 
-// FIXME : temp added to extern globally
-extern std::string config_file;
 extern time_t sim_start_time;
 extern int n_blocks;
 extern int max_mp_size;
@@ -97,40 +95,7 @@ struct Block {
     std::vector<Record> txn;
 };
 
-// uint_64 id, uint_32 fee
-// typedef multi_index_container<Record,
-//                              indexed_by<hashed_unique<member<Record, uint64_t, &Record::id>>,
-//                                         ordered_non_unique<member<Record, uint32_t, &Record::fee>>, random_access<>>>
-//    Mempool;
-
 enum miner_type { HONEST, MALICIOUS };
-
-// Hastab
-struct Key {
-    uint64_t tx_id;
-    int miner_id;
-
-    bool operator==(const Key &other) const
-    {
-        return (tx_id == other.tx_id && miner_id == other.miner_id);
-    }
-};
-
-struct KeyHasher {
-    std::size_t operator()(const Key &k) const
-    {
-        // Start with a hash value of 0    .
-        std::size_t seed = 0;
-
-        // Modify 'seed' by XORing and bit-shifting in
-        // one member of 'Key' after the other:
-        boost::hash_combine(seed, boost::hash_value(k.tx_id));
-        boost::hash_combine(seed, boost::hash_value(k.miner_id));
-
-        // Return the result.
-        return seed;
-    }
-};
 
 typedef htab_t *Mempool;
 
