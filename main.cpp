@@ -79,6 +79,7 @@ int malicious_miner_id = -1;
 FILE *progress_file = nullptr;
 FILE *mempool_stats_file = nullptr;
 FILE *data_stats_file = nullptr;
+FILE *metadata_file = nullptr;
 
 static void Connect(Miner *m1, Miner *m2, double latency)
 {
@@ -394,8 +395,7 @@ int main(int argc, char **argv)
     size_t config_filename_pos = config_file_path.find_last_of('/');
     if (config_filename_pos == std::string::npos) {
         config_filename = config_file_path;
-    }
-    else {
+    } else {
         config_filename = config_file_path.substr(config_filename_pos + 1);
     }
 
@@ -439,13 +439,18 @@ int main(int argc, char **argv)
     // outputs/data_{CFG}_{RUN_ID}.csv
     std::string data_stats_filename = "outputs/data_";
 
+    // outputs/metadata_{CFG}_{RUN_ID}.data
+    std::string metadata_filename = "outputs/metadata_";
+
     progress_filename.append(config_filename).append("_").append(sim_run_id_str).append(".out");
     mempool_stats_filename.append(config_filename).append("_").append(sim_run_id_str).append(".csv");
     data_stats_filename.append(config_filename).append("_").append(sim_run_id_str).append(".csv");
+    metadata_filename.append(config_filename).append("_").append(sim_run_id_str).append(".data");
 
     progress_file = fopen(progress_filename.c_str(), "w");
     mempool_stats_file = fopen(mempool_stats_filename.c_str(), "w");
     data_stats_file = fopen(data_stats_filename.c_str(), "w");
+    metadata_file = fopen(metadata_filename.c_str(), "w");
 
     if (progress_file == nullptr) {
         printf("Cannot open progress file\n");
@@ -462,6 +467,13 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    if (metadata_file == nullptr) {
+        printf("Cannot open metadata file\n");
+        return EXIT_FAILURE;
+    }
+
+    std::string config_full_path = std::filesystem::canonical(std::filesystem::absolute(config_file_path));
+
     // Print simulation start
     log_progress("Simulation %s_%s\n"
                  "Config: %s\n"
@@ -477,13 +489,28 @@ int main(int argc, char **argv)
                  "Min. transaction generate size: %d\n"
                  "Max. transaction generate size: %d\n"
                  "========================================================\n",
-                 config_filename.c_str(), sim_run_id_str, std::filesystem::canonical(std::filesystem::absolute(config_file_path)).c_str(), n_blocks, malicious_miners,
+                 config_filename.c_str(), sim_run_id_str, config_full_path.c_str(), n_blocks, malicious_miners,
                  malicious_hashpower * 100, honest_miners, honest_hashpower * 100, block_latency, rng_seed, max_mp_size,
                  blockSize, min_tx_gen_secs, max_tx_gen_secs, min_tx_gen_size, max_tx_gen_size);
 
     // Create headers in csv files
     log_mempool("MinerID,Progress,MempoolSize\n");
     log_data_stats("TransactionID,Fee,BlockID,Depth,MinerID\n");
+
+    // Print simulation params info to metadata file
+    log_metadata("name=%s_%s\n"
+                 "cfg_path=%s\n"
+                 "blocks=%d\n"
+                 "seed=%d\n"
+                 "block_size=%d\n"
+                 "block_latency=%.5lf\n"
+                 "max_mempool_size=%d\n"
+                 "malicious_miners=%d\n"
+                 "honest_miners=%d\n"
+                 "malicious_power=%.5lf\n"
+                 "honest_power=%.5lf\n",
+                 config_filename.c_str(), sim_run_id_str, config_full_path.c_str(), n_blocks, rng_seed, blockSize,
+                 block_latency, max_mp_size, malicious_miners, honest_miners, malicious_hashpower, honest_hashpower);
 
     // ========================================================
     // Print 0% progress
@@ -554,6 +581,7 @@ int main(int argc, char **argv)
     fclose(progress_file);
     fclose(mempool_stats_file);
     fclose(data_stats_file);
+    fclose(metadata_file);
 
     return EXIT_SUCCESS;
 }
@@ -575,7 +603,7 @@ void sim_err_exit_out_of_tx(Miner *miner)
                  miner->GetBlockLatency());
 
     // Clear miners mempools
-    for (auto single_miner: miners) {
+    for (auto single_miner : miners) {
         htab_free(single_miner->mem_pool);
     }
 
@@ -583,6 +611,7 @@ void sim_err_exit_out_of_tx(Miner *miner)
     fclose(progress_file);
     fclose(mempool_stats_file);
     fclose(data_stats_file);
+    fclose(metadata_file);
 
     exit(EXIT_FAILURE);
 }
