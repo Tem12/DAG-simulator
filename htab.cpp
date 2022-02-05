@@ -1,363 +1,270 @@
-//============================================================================//
-// htab.h
-// Solution: FIT VUT IJC-DU2 - b)
-// Date: 09.04.2020
-// Author: Tomáš Hladký at BUT FIT
-//============================================================================//
+/**
+ * @file htab.cpp
+ * @brief Module of custom implementation of hashtab with fixed size
+ * @author Tomas Hladky <xhladk15@stud.fit.vutbr.cz>
+ * @author Martin Peresini <iperesini@fit.vut.cz>
+ * @date 2021 - 2022
+ */
+/*
+ * Copyright (C) BUT Security@FIT, 2021 - 2022
+ *
+ * LICENSE TERMS
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name of the Company nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * ALTERNATIVELY, provided that this notice is retained in full, this
+ * product may be distributed under the terms of the GNU General Public
+ * License (GPL) version 2 or later, in which case the provisions
+ * of the GPL apply INSTEAD OF those given above.
+ *
+ * This software is provided ``as is'', and any express or implied
+ * warranties, including, but not limited to, the implied warranties of
+ * merchantability and fitness for a particular purpose are disclaimed.
+ * In no event shall the company or contributors be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential
+ * damages (including, but not limited to, procurement of substitute
+ * goods or services; loss of use, data, or profits; or business
+ * interruption) however caused and on any theory of liability, whether
+ * in contract, strict liability, or tort (including negligence or
+ * otherwise) arising in any way out of the use of this software, even
+ * if advised of the possibility of such damage.
+ *
+ */
 
+#include <vector>
 #include "htab.h"
 
-htab_iterator_t htab_begin(const htab_t *t)
+HtabItem::HtabItem()
 {
-    htab_iterator_t iterator;
-    iterator.t = t;
-    iterator.ptr = nullptr;
-    iterator.idx = 0;
+    keyContent = { 0, 0 };
+    data = 0;
+    next = nullptr;
+}
 
-    if (t == nullptr) {
-        return iterator;
-    }
+Htab::Htab(size_t n)
+{
+    assert(n > 0);
 
-    for (size_t i = 0; i < t->arr_size; i++) {
-        if (t->item[i] != nullptr) {
-            iterator.ptr = t->item[i];
-            iterator.idx = i;
+    items.reserve(n);
+
+    std::vector<HtabItem *> _buckets(n, nullptr);
+    buckets = _buckets;
+
+    arrSize = n;
+    itemCount = 0;
+}
+
+std::shared_ptr<HtabIterator> Htab::begin()
+{
+    std::shared_ptr<HtabIterator> it(new HtabIterator(this, nullptr, 0));
+
+    for (size_t i = 0; i < this->arrSize; i++) {
+        if (this->buckets[i] != nullptr) {
+            it->item = this->buckets[i];
+            it->idx = i;
             break;
         }
     }
 
-    return iterator;
+    return it;
 }
 
 // Try to find the closest item to specified index by iterating up and down
-htab_iterator_t htab_find_closest(htab_t *t, long index)
+std::shared_ptr<HtabIterator> Htab::findClosest(size_t index)
 {
-    htab_iterator_t iterator;
-    iterator.t = t;
-    iterator.ptr = nullptr;
-    iterator.idx = 0;
+    std::shared_ptr<HtabIterator> it(new HtabIterator(this, nullptr, 0));
 
-    if (t == nullptr) {
-        return iterator;
-    }
-
-    size_t size = t->arr_size;
-    size_t max = (size / 2) + 1;
-    long down_i = index;
-    long up_i = index == size - 1 ? 0 : index + 1;
+    size_t max = (this->arrSize / 2) + 1;
+    size_t down_i = index;
+    size_t up_i = index == this->arrSize - 1 ? 0 : index + 1;
 
     for (int i = 0; i < max; i++) {
         // Test positions on and below index
         if (down_i < 0) {
-            down_i = size - 1;
+            down_i = this->arrSize - 1;
         }
-        if (t->item[down_i] != nullptr) {
-            iterator.ptr = t->item[down_i];
-            iterator.idx = down_i;
-            return iterator;
+        if (this->buckets[down_i] != nullptr) {
+            it->item = this->buckets[down_i];
+            it->idx = down_i;
+            return it;
         } else {
             down_i--;
         }
 
         // Test positions above index
-        if (up_i > size - 1) {
+        if (up_i > this->arrSize - 1) {
             up_i = 0;
         }
-        if (t->item[up_i] != nullptr) {
-            iterator.ptr = t->item[up_i];
-            iterator.idx = up_i;
-            return iterator;
+        if (this->buckets[up_i] != nullptr) {
+            it->item = this->buckets[up_i];
+            it->idx = up_i;
+            return it;
         } else {
             up_i++;
         }
     }
 
     // No item was found
-    return iterator;
+    return it;
 }
 
-size_t htab_bucket_count(const htab_t *t)
+size_t Htab::size()
 {
-    if (t == nullptr)
-        return 0;
-
-    return t->arr_size;
+    return this->itemCount;
 }
 
-htab_iterator_t htab_end(const htab_t *t)
+size_t Htab::bucketCount()
 {
-    htab_iterator_t iterator;
-    iterator.t = t;
-    iterator.ptr = nullptr;
-    iterator.idx = 0;
+    return this->arrSize;
+}
 
-    if (t == nullptr) {
-        return iterator;
-    }
+std::shared_ptr<HtabIterator> Htab::end()
+{
+    std::shared_ptr<HtabIterator> it(new HtabIterator(this, nullptr, 0));
 
-    for (size_t i = t->arr_size - 1; i > 0; i--) {
-        if (t->item[i] != nullptr) {
-            iterator.idx = i + 1;
+    for (size_t i = this->arrSize - 1; i > 0; i--) {
+        if (this->buckets[i] != nullptr) {
+            it->idx = i + 1;
             break;
         }
     }
 
-    return iterator;
+    return it;
 }
 
-void htab_erase(htab_t *t, htab_iterator_t it)
+void Htab::erase(HtabIterator *it)
 {
-    if (t == nullptr)
-        return;
-
-    if (!htab_iterator_valid(it))
+    if (!it->isValid())
         return;
 
     // Check if entry is on start of bucket
-    htab_iterator_t start;
-    start.t = t;
-    start.ptr = t->item[it.idx];
-    start.idx = it.idx;
+    std::shared_ptr<HtabIterator> start(new HtabIterator(this, this->buckets[it->idx], it->idx));
 
-    if (htab_iterator_equal(it, start)) {
+    if (it->isEqual(start.get())) {
         // Check if entry is alone in bucket
-        if (start.ptr->next == nullptr) {
-            t->item[it.idx] = nullptr;
+        if (start->item->next == nullptr) {
+            this->buckets[it->idx] = nullptr;
         } else {
-            t->item[it.idx] = start.ptr->next;
+            this->buckets[it->idx] = start->item->next;
         }
     } else {
         // Find previous entry in the same bucket
-        while (start.ptr->next != it.ptr) {
-            if (start.ptr->next == nullptr)
+        while (start->item->next != it->item) {
+            if (start->item->next == nullptr)
                 return;
-            start.ptr = start.ptr->next;
+            start->item = start->item->next;
         }
 
         // Check if entry has next entry in same bucket
-        if (it.ptr->next != nullptr) {
-            start.ptr->next = it.ptr->next;
+        if (it->item->next != nullptr) {
+            start->item->next = it->item->next;
         } else {
-            start.ptr->next = nullptr;
+            start->item->next = nullptr;
         }
     }
-    t->size--;
 
-    free((char *)it.ptr->key);
-    free(it.ptr);
+    this->itemCount--;
+//    this->items.erase(std::remove(this->items.begin(), this->items.end(), it->item), this->items.end());
+
+    auto itr = std::find_if(this->items.begin(),
+                            this->items.end(),
+                            [it](auto &element) { return element.get() == it->item;});
+
+    this->items.erase(itr);
 }
 
-htab_iterator_t htab_find(htab_t *t, htab_key_t key)
-{
-    if (t == nullptr)
-        return htab_end(t);
-
-    if (key == nullptr)
-        return htab_end(t);
-
-    htab_iterator_t iterator;
-
-    // Get index from hash function
-    size_t index = (htab_hash_fun(key) % t->arr_size);
-
-    iterator.t = t;
-    iterator.idx = index;
-
-    struct htab_item *next = t->item[index];
-
-    // Try to find an existing entry
-    if (next != nullptr) {
-        do {
-            if (strcmp(next->key, key) == 0) {
-                iterator.ptr = next;
-                return iterator;
-            } else {
-                next = next->next;
-            }
-        } while (next != nullptr);
-    }
-
-    iterator = htab_end(t);
-    return iterator;
-}
-
-htab_iterator_t htab_find(htab_t *t, htab_key_content_t key_content)
-{
-    if (t == nullptr)
-        return htab_end(t);
-
-    htab_key_t key = const_cast<htab_key_t>(
-        std::to_string(key_content.minerID).append(".").append(std::to_string(key_content.txID)).c_str());
-
-    if (key == nullptr)
-        return htab_end(t);
-
-    htab_iterator_t iterator;
-
-    // Get index from hash function
-    size_t index = (htab_hash_fun(key) % t->arr_size);
-
-    iterator.t = t;
-    iterator.idx = index;
-
-    struct htab_item *next = t->item[index];
-
-    // Try to find an existing entry
-    if (next != nullptr) {
-        do {
-            if (strcmp(next->key, key) == 0) {
-                iterator.ptr = next;
-                return iterator;
-            } else {
-                next = next->next;
-            }
-        } while (next != nullptr);
-    }
-
-    iterator = htab_end(t);
-    return iterator;
-}
-
-size_t htab_hash_fun(htab_key_t str)
+size_t Htab::hashFun(const std::string &str)
 {
     uint32_t h = 0;
     const unsigned char *p;
-    for (p = (const unsigned char *)str; *p != '\0'; p++)
+    for (p = (const unsigned char *)str.c_str(); *p != '\0'; p++)
         h = 65599 * h + *p;
     return h;
 }
 
-htab_t *htab_init(size_t n)
+std::shared_ptr<HtabIterator> Htab::find(const std::string &itemKey)
 {
-    assert(n > 0);
-
-    auto *htab = static_cast<htab_t *>(malloc(sizeof(htab_t) + sizeof(struct htab_item) * n));
-
-    if (htab == nullptr)
-        return nullptr;
-
-    memset(htab, 0, sizeof(htab_t) + sizeof(struct htab_item) * n);
-
-    htab->arr_size = n;
-    htab->size = 0;
-
-    return htab;
-}
-
-void htab_clear(htab_t *t)
-{
-    if (t == nullptr)
-        return;
-
-    struct htab_item *next;
-    for (size_t i = 0; i < t->arr_size; ++i) {
-        while (t->item[i] != nullptr) {
-            free((char *)t->item[i]->key);
-            next = t->item[i]->next;
-            free(t->item[i]);
-            t->item[i] = next;
-        }
-    }
-    t->size = 0;
-}
-
-void htab_free(htab_t *t)
-{
-    htab_clear(t);
-    free(t);
-}
-
-htab_key_t htab_iterator_get_key(htab_iterator_t it)
-{
-    assert(htab_iterator_valid(it));
-
-    return it.ptr->key;
-}
-
-htab_key_content_t htab_iterator_get_key_content(htab_iterator_t it)
-{
-    assert(htab_iterator_valid(it));
-
-    return it.ptr->key_content;
-}
-
-htab_value_t htab_iterator_get_value(htab_iterator_t it)
-{
-    assert(htab_iterator_valid(it));
-
-    return it.ptr->data;
-}
-
-htab_iterator_t htab_iterator_next(htab_iterator_t it)
-{
-    htab_iterator_t iterator;
-    iterator.t = nullptr;
-    iterator.ptr = nullptr;
-    iterator.idx = 0;
-
-    if (!htab_iterator_valid(it))
-        return iterator;
-
-    iterator.t = it.t;
-    iterator.idx = it.idx;
-
-    // Try to get next entry on same index
-    if (it.ptr->next != nullptr) {
-        iterator.ptr = it.ptr->next;
-        return iterator;
-    } else {
-        // Else get next entry from array
-        if (iterator.idx + 1 < iterator.t->arr_size) {
-            for (size_t i = iterator.idx + 1; i < iterator.t->arr_size; i++) {
-                if (it.t->item[i] != nullptr) {
-                    iterator.ptr = it.t->item[i];
-                    iterator.idx = i;
-                    return iterator;
-                }
-            }
-        }
-    }
-
-    iterator = htab_end(it.t);
-    return iterator;
-}
-
-htab_value_t htab_iterator_set_value(htab_iterator_t it, htab_value_t val)
-{
-    assert(htab_iterator_valid(it));
-
-    it.ptr->data = val;
-
-    return val;
-}
-
-htab_iterator_t htab_lookup_add(htab_t *t, htab_key_content_t key_content)
-{
-    if (t == nullptr)
-        return htab_end(t);
-
-    htab_key_t key = const_cast<htab_key_t>(
-        std::to_string(key_content.minerID).append(".").append(std::to_string(key_content.txID)).c_str());
-
-    if (key == nullptr)
-        return htab_end(t);
-
-    htab_iterator_t iterator;
+    if (itemKey.empty())
+        return this->end();
 
     // Get index from hash function
-    size_t index = (htab_hash_fun(key) % t->arr_size);
+    size_t index = (hashFun(itemKey) % this->arrSize);
 
-    iterator.t = t;
-    iterator.idx = index;
-
-    struct htab_item *next = t->item[index];
+    HtabItem *next = this->buckets[index];
 
     // Try to find an existing entry
     if (next != nullptr) {
         do {
-            if (strcmp(next->key, key) == 0) {
-                iterator.ptr = next;
-                return iterator;
+            if (next->key == itemKey) {
+                std::shared_ptr<HtabIterator> it(new HtabIterator(this, next, index));
+                return it;
+            } else {
+                next = next->next;
+            }
+        } while (next != nullptr);
+    }
+
+    return this->end();
+}
+
+std::shared_ptr<HtabIterator> Htab::find(HtabKeyContent key_content)
+{
+    std::string itemKey = std::to_string(key_content.minerID).append(".").append(std::to_string(key_content.txID));
+
+    // Get index from hash function
+    size_t index = (hashFun(itemKey) % this->arrSize);
+
+    HtabItem *next = this->buckets[index];
+
+    // Try to find an existing entry
+    if (next != nullptr) {
+        do {
+            if (next->key == itemKey) {
+                std::shared_ptr<HtabIterator> it(new HtabIterator(this, next, index));
+                return it;
+            } else {
+                next = next->next;
+            }
+        } while (next != nullptr);
+    }
+
+    return this->end();
+}
+
+void Htab::clear()
+{
+    this->items.clear();
+    std::fill(this->buckets.begin(), this->buckets.end(), nullptr);
+    this->itemCount = 0;
+}
+
+std::shared_ptr<HtabIterator> Htab::insert(HtabKeyContent key_content)
+{
+    std::string key = std::to_string(key_content.minerID).append(".").append(std::to_string(key_content.txID));
+
+    // Get index from hash function
+    size_t index = (hashFun(key) % this->arrSize);
+
+    std::shared_ptr<HtabIterator> it(new HtabIterator(this, nullptr, index));
+    HtabItem *next = this->buckets[index];
+
+    // Try to find an existing entry
+    if (next != nullptr) {
+        do {
+            if (next->key == key) {
+                it->item = next;
+                return it;
             } else {
                 next = next->next;
             }
@@ -365,41 +272,84 @@ htab_iterator_t htab_lookup_add(htab_t *t, htab_key_content_t key_content)
     }
 
     // Create new entry
-    iterator.ptr = static_cast<htab_item *>(malloc(sizeof(struct htab_item)));
+//    auto *htabItem = new HtabItem();
+//    std::shared_ptr<HtabItem> htabItem(new HtabItem());
+    std::shared_ptr<HtabItem> htabItem = std::make_shared<HtabItem>();
+    this->items.push_back(htabItem);
 
-    if (iterator.ptr == nullptr) {
-        return htab_end(t);
-    }
-
-    iterator.ptr->key = static_cast<htab_key_t>(malloc(strlen(key) + 1));
-
-    if (iterator.ptr->key == nullptr) {
-        return htab_end(t);
+    it->item = htabItem.get();
+    if (it->item == nullptr) {
+        return this->end();
     }
 
     // Set item key
-    strcpy((char *)iterator.ptr->key, key);
+    htabItem->key = key;
 
     // Set item key content
-    iterator.ptr->key_content.txID = key_content.txID;
-    iterator.ptr->key_content.minerID = key_content.minerID;
+    htabItem->keyContent.txID = key_content.txID;
+    htabItem->keyContent.minerID = key_content.minerID;
 
     // Set item value
-    htab_iterator_set_value(iterator, 0);
+    htabItem->data = 0;
 
-    // New entry will in start of the current bucket (list)
-    iterator.ptr->next = t->item[index];
+    // New entry will be at start of the current bucket (list)
+    htabItem->next = this->buckets[index];
 
-    t->item[index] = iterator.ptr;
-    t->size++;
+    this->buckets[index] = htabItem.get();
+    this->itemCount++;
 
-    return iterator;
+    return it;
 }
 
-size_t htab_size(const htab_t *t)
+HtabIterator::HtabIterator(Htab *_t, HtabItem *_item, size_t _idx)
 {
-    if (t == nullptr)
-        return 0;
+    t = _t;
+    item = _item;
+    idx = _idx;
+}
 
-    return t->size;
+// test: iterator != end
+bool HtabIterator::isValid()
+{
+    return this->item != nullptr;
+}
+
+// test: iterator1 == iterator2
+bool HtabIterator::isEqual(HtabIterator *it)
+{
+    return this->t == it->t && this->item == it->item;
+}
+
+void HtabIterator::next()
+{
+    if (!isValid())
+        return;
+
+    // Try to get next entry on same index
+    if (item->next != nullptr) {
+        item = item->next;
+        return;
+    } else {
+        // Else get next entry from array
+        if (idx + 1 < t->arrSize) {
+            for (size_t i = idx + 1; i < t->arrSize; i++) {
+                if (t->buckets[i] != nullptr) {
+                    item = t->buckets[i];
+                    idx = i;
+                    return;
+                }
+            }
+        }
+    }
+
+    // End of the hashtable, return non-existing item
+    item = nullptr;
+    idx = 0;
+}
+
+void HtabIterator::setValue(uint32_t value)
+{
+    assert(isValid());
+
+    item->data = value;
 }
