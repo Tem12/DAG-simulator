@@ -276,7 +276,9 @@ class Miner
 
                 // Get random tx by accessing begin. Randomness is created by custom key
                 // which is then hashed and consists of 2 elements: tx_id and miner_id
-                auto mem_pool_it = mem_pool->findClosest(distr(rng));
+
+//                auto mem_pool_it = mem_pool->findClosest(distr(rng));
+                auto mem_pool_it = mem_pool->begin();
 
                 if (!mem_pool_it->isValid()) {
                     // Invalid transaction, stop the simulation

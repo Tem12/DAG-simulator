@@ -51,6 +51,7 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
 struct HtabKeyContent {
     uint32_t minerID;
@@ -60,12 +61,12 @@ class HtabItem;
 class HtabIterator;
 class Htab {
   public:
-    std::vector<std::shared_ptr<HtabItem>> items;
-    std::vector<HtabItem *> buckets;
+    std::vector<HtabItem *> items;
     size_t itemCount;
     size_t arrSize;
 
     Htab(size_t n);
+    ~Htab();
     std::shared_ptr<HtabIterator> begin();
     std::shared_ptr<HtabIterator> findClosest(size_t index);
     size_t size();
