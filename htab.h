@@ -52,6 +52,7 @@
 #include <cstring>
 #include <iostream>
 #include <vector>
+#include <memory>
 
 struct HtabKeyContent {
     uint32_t minerID;
