@@ -93,7 +93,7 @@ std::shared_ptr<HtabIterator> Htab::findClosest(size_t index)
 
     for (int i = 0; i < max; i++) {
         // Test positions on and below index
-        if (down_i < 0) {
+        if (down_i == UINT64_MAX) {
             down_i = this->arrSize - 1;
         }
         if (this->items[down_i] != nullptr) {
@@ -134,14 +134,6 @@ size_t Htab::bucketCount()
 std::shared_ptr<HtabIterator> Htab::end()
 {
     std::shared_ptr<HtabIterator> it(new HtabIterator(this, nullptr, 0));
-
-    for (size_t i = this->arrSize - 1; i > 0; i--) {
-        if (this->items[i] != nullptr) {
-            it->idx = i + 1;
-            break;
-        }
-    }
-
     return it;
 }
 
@@ -281,10 +273,7 @@ std::shared_ptr<HtabIterator> Htab::insert(HtabKeyContent key_content)
     }
 
     // Create new entry
-//    std::shared_ptr<HtabItem> htabItem(new HtabItem());
-//    std::shared_ptr<HtabItem> htabItem = std::make_shared<HtabItem>();
     auto *htabItem = new HtabItem();
-//    this->app.push_back(htabItem);
 
     it->item = htabItem;
     if (it->item == nullptr) {
