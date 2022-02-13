@@ -1,48 +1,48 @@
 /**
-* @file main.cpp
-* @brief Main file for DAG simulator implementation
-* @author Tomas Hladky <xhladk15@stud.fit.vutbr.cz>
-* @author Martin Peresini <iperesini@fit.vut.cz>
-* @date 2021 - 2022
-*
-* Original @author Gavin Andresen <gavinandresen@gmail.com>
-*/
+ * @file main.cpp
+ * @brief Main file for DAG simulator implementation
+ * @author Tomas Hladky <xhladk15@stud.fit.vutbr.cz>
+ * @author Martin Peresini <iperesini@fit.vut.cz>
+ * @date 2021 - 2022
+ *
+ * Original @author Gavin Andresen <gavinandresen@gmail.com>
+ */
 /*
-* Copyright (C) BUT Security@FIT, 2021 - 2022
-*
-* LICENSE TERMS
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions
-* are met:
-* 1. Redistributions of source code must retain the above copyright
-*    notice, this list of conditions and the following disclaimer.
-* 2. Redistributions in binary form must reproduce the above copyright
-*    notice, this list of conditions and the following disclaimer in
-*    the documentation and/or other materials provided with the
-*    distribution.
-* 3. Neither the name of the Company nor the names of its contributors
-*    may be used to endorse or promote products derived from this
-*    software without specific prior written permission.
-*
-* ALTERNATIVELY, provided that this notice is retained in full, this
-* product may be distributed under the terms of the GNU General Public
-* License (GPL) version 2 or later, in which case the provisions
-* of the GPL apply INSTEAD OF those given above.
-*
-* This software is provided ``as is'', and any express or implied
-* warranties, including, but not limited to, the implied warranties of
-* merchantability and fitness for a particular purpose are disclaimed.
-* In no event shall the company or contributors be liable for any
-* direct, indirect, incidental, special, exemplary, or consequential
-* damages (including, but not limited to, procurement of substitute
-* goods or services; loss of use, data, or profits; or business
-* interruption) however caused and on any theory of liability, whether
-* in contract, strict liability, or tort (including negligence or
-* otherwise) arising in any way out of the use of this software, even
-* if advised of the possibility of such damage.
-*
-*/
+ * Copyright (C) BUT Security@FIT, 2021 - 2022
+ *
+ * LICENSE TERMS
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name of the Company nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * ALTERNATIVELY, provided that this notice is retained in full, this
+ * product may be distributed under the terms of the GNU General Public
+ * License (GPL) version 2 or later, in which case the provisions
+ * of the GPL apply INSTEAD OF those given above.
+ *
+ * This software is provided ``as is'', and any express or implied
+ * warranties, including, but not limited to, the implied warranties of
+ * merchantability and fitness for a particular purpose are disclaimed.
+ * In no event shall the company or contributors be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential
+ * damages (including, but not limited to, procurement of substitute
+ * goods or services; loss of use, data, or profits; or business
+ * interruption) however caused and on any theory of liability, whether
+ * in contract, strict liability, or tort (including negligence or
+ * otherwise) arising in any way out of the use of this software, even
+ * if advised of the possibility of such damage.
+ *
+ */
 
 #include "scheduler.h"
 
@@ -155,8 +155,9 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
             auto in = fee_gen() * lambda;
             // int in = distr(rng);
             for (auto miner : miners) {
-                auto htab_it = htab_lookup_add(miner->mem_pool, { .minerID = miner->mID, .txID = txID });
-                htab_iterator_set_value(htab_it, (uint32_t)in);
+                auto htab_it =
+                    miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
+                htab_it->setValue((uint32_t)in);
             }
             txID++;
         }
@@ -189,11 +190,12 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
         // int in = distr(rng);
         auto in = fee_gen() * lambda;
         for (auto miner : miners) {
-            if (htab_size(miner->mem_pool) + txsz > max_mp_size) {
+            if (miner->mem_pool->size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            auto htab_it = htab_lookup_add(miner->mem_pool, { .minerID = miner->mID, .txID = txID });
-            htab_iterator_set_value(htab_it, (uint32_t)in);
+            auto htab_it =
+                miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
+            htab_it->setValue((uint32_t)in);
         }
         txID++;
     }
@@ -603,11 +605,6 @@ int main(int argc, char **argv)
     // }
     // std::cout << "\n";
 
-    // Clear miners mempools
-    for (auto miner : miners) {
-        htab_free(miner->mem_pool);
-    }
-
     log_progress("Simulation duration: ");
     auto time_diff = (time_t)difftime(time(nullptr), sim_start_time);
     print_diff_time(time_diff);
@@ -634,7 +631,7 @@ void sim_err_exit_out_of_tx(Miner *miner)
     log_progress("============================ Start of snapshot ============================\n");
     log_progress("MinerID\tMempoolSize\n");
     for (auto single_miner : miners) {
-        log_progress("%d\t%ld\n", single_miner->mID, htab_size(single_miner->mem_pool));
+        log_progress("%d\t%ld\n", single_miner->mID, single_miner->mem_pool->size());
     }
     log_progress("============================= End of snapshot =============================\n");
     log_progress("Simulation error: Miner[%d] was chosen to generate block but has run out of transactions\n",
@@ -642,11 +639,6 @@ void sim_err_exit_out_of_tx(Miner *miner)
     log_progress("Miner[%d] - %s with %.2lf%% hashpower and block latency %.2lf secs\n", miner->mID,
                  miner->type == HONEST ? "Honest" : "Malicious", miner->GetHashFraction() * 100,
                  miner->GetBlockLatency());
-
-    // Clear miners mempools
-    for (auto single_miner : miners) {
-        htab_free(single_miner->mem_pool);
-    }
 
     // Close logging files
     fclose(progress_file);

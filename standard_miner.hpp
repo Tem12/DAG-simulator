@@ -1,48 +1,48 @@
 /**
-* @file standard_miner.hpp
-* @brief Main file for DAG simulator implementation
-* @author Tomas Hladky <xhladk15@stud.fit.vutbr.cz>
-* @author Martin Peresini <iperesini@fit.vut.cz>
-* @date 2021 - 2022
-*
-* Original @author Gavin Andresen <gavinandresen@gmail.com>
-*/
+ * @file standard_miner.hpp
+ * @brief Main file for DAG simulator implementation
+ * @author Tomas Hladky <xhladk15@stud.fit.vutbr.cz>
+ * @author Martin Peresini <iperesini@fit.vut.cz>
+ * @date 2021 - 2022
+ *
+ * Original @author Gavin Andresen <gavinandresen@gmail.com>
+ */
 /*
-* Copyright (C) BUT Security@FIT, 2021 - 2022
-*
-* LICENSE TERMS
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions
-* are met:
-* 1. Redistributions of source code must retain the above copyright
-*    notice, this list of conditions and the following disclaimer.
-* 2. Redistributions in binary form must reproduce the above copyright
-*    notice, this list of conditions and the following disclaimer in
-*    the documentation and/or other materials provided with the
-*    distribution.
-* 3. Neither the name of the Company nor the names of its contributors
-*    may be used to endorse or promote products derived from this
-*    software without specific prior written permission.
-*
-* ALTERNATIVELY, provided that this notice is retained in full, this
-* product may be distributed under the terms of the GNU General Public
-* License (GPL) version 2 or later, in which case the provisions
-* of the GPL apply INSTEAD OF those given above.
-*
-* This software is provided ``as is'', and any express or implied
-* warranties, including, but not limited to, the implied warranties of
-* merchantability and fitness for a particular purpose are disclaimed.
-* In no event shall the company or contributors be liable for any
-* direct, indirect, incidental, special, exemplary, or consequential
-* damages (including, but not limited to, procurement of substitute
-* goods or services; loss of use, data, or profits; or business
-* interruption) however caused and on any theory of liability, whether
-* in contract, strict liability, or tort (including negligence or
-* otherwise) arising in any way out of the use of this software, even
-* if advised of the possibility of such damage.
-*
-*/
+ * Copyright (C) BUT Security@FIT, 2021 - 2022
+ *
+ * LICENSE TERMS
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name of the Company nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * ALTERNATIVELY, provided that this notice is retained in full, this
+ * product may be distributed under the terms of the GNU General Public
+ * License (GPL) version 2 or later, in which case the provisions
+ * of the GPL apply INSTEAD OF those given above.
+ *
+ * This software is provided ``as is'', and any express or implied
+ * warranties, including, but not limited to, the implied warranties of
+ * merchantability and fitness for a particular purpose are disclaimed.
+ * In no event shall the company or contributors be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential
+ * damages (including, but not limited to, procurement of substitute
+ * goods or services; loss of use, data, or profits; or business
+ * interruption) however caused and on any theory of liability, whether
+ * in contract, strict liability, or tort (including negligence or
+ * otherwise) arising in any way out of the use of this software, even
+ * if advised of the possibility of such damage.
+ *
+ */
 
 #ifndef STANDARD_MINER_H
 #define STANDARD_MINER_H
@@ -140,7 +140,7 @@ struct Block {
 
 enum miner_type { HONEST, MALICIOUS };
 
-typedef htab_t *Mempool;
+typedef Htab *Mempool;
 
 class Miner
 {
@@ -148,6 +148,7 @@ class Miner
     // public
     const int mID;
     std::shared_ptr<std::vector<Block>> blocks;
+    std::shared_ptr<Htab> mem_pool_ptr;
     Mempool mem_pool;
     miner_type type; // Miner can either honest or malicious
     u_int64_t balance;
@@ -162,7 +163,11 @@ class Miner
         : hash_fraction(_hash_fraction), type(_type), block_latency(_block_latency), jitter_func(_func), mID(nextID++)
     {
         // best_chain = std::make_shared<std::vector<int>>();
-        mem_pool = htab_init((size_t)(max_mp_size));
+
+//        mem_pool = new Htab((size_t)max_mp_size);
+        //std::unique_ptr<Htab> _mempool(new Htab((size_t)max_mp_size));
+        mem_pool_ptr = std::make_shared<Htab>(static_cast<size_t>(max_mp_size));
+        mem_pool = mem_pool_ptr.get();
         blocks = std::make_shared<std::vector<Block>>();
         balance = 0;
         depth = 0;
@@ -174,40 +179,40 @@ class Miner
         // adjTable[(peer->mID)] = std::map<int, bool>{};
     }
 
-    static bool SortCmpAsc(htab_item *a, htab_item *b)
+    static bool SortCmpAsc(HtabItem *a, HtabItem *b)
     {
         return a->data < b->data;
     }
 
-    static bool SortCmpDesc(htab_item *a, htab_item *b)
+    static bool SortCmpDesc(HtabItem *a, HtabItem *b)
     {
         return a->data > b->data;
     }
 
-    std::vector<htab_item *> getSortedMPAsc()
+    std::vector<HtabItem *> getSortedMPAsc()
     {
-        size_t mem_pool_size = htab_size(mem_pool);
-        std::vector<htab_item *> txs(mem_pool_size, nullptr);
+        size_t mem_pool_size = mem_pool->size();
+        std::vector<HtabItem *> txs(mem_pool_size, nullptr);
 
-        htab_iterator it = htab_begin(mem_pool);
+        auto it = mem_pool->begin();
         for (int i = 0; i < mem_pool_size; i++) {
-            txs[i] = (it.ptr);
-            it = htab_iterator_next(it);
+            txs[i] = (it->item);
+            it->next();
         }
 
         std::sort(txs.begin(), txs.end(), SortCmpAsc);
         return txs;
     }
 
-    std::vector<htab_item *> getSortedMPDesc()
+    std::vector<HtabItem *> getSortedMPDesc()
     {
-        size_t mem_pool_size = htab_size(mem_pool);
-        std::vector<htab_item *> txs(mem_pool_size, nullptr);
+        size_t mem_pool_size = mem_pool->size();
+        std::vector<HtabItem *> txs(mem_pool_size, nullptr);
 
-        htab_iterator it = htab_begin(mem_pool);
+        auto it = mem_pool->begin();
         for (int i = 0; i < mem_pool_size; i++) {
-            txs[i] = it.ptr;
-            it = htab_iterator_next(it);
+            txs[i] = it->item;
+            it->next();
         }
 
         std::sort(txs.begin(), txs.end(), SortCmpDesc);
@@ -216,11 +221,11 @@ class Miner
 
     void RemoveMP(const int size)
     {
-        std::vector<htab_item *> sortedMp = getSortedMPAsc();
+        std::vector<HtabItem *> sortedMp = getSortedMPAsc();
 
         for (int i = 0; i < size; i++) {
-            auto htab_it = htab_find(mem_pool, sortedMp[i]->key);
-            htab_erase(mem_pool, htab_it);
+            auto htab_it = mem_pool->find(sortedMp[i]->key);
+            mem_pool->erase(htab_it.get());
         }
     }
 
@@ -256,7 +261,7 @@ class Miner
             // Honest miners
 
             for (int i = 0; i < blockSize; i++) {
-                std::uniform_int_distribution<> distr(0, (int)mem_pool->arr_size - 1);
+                std::uniform_int_distribution<> distr(0, (int)mem_pool->arrSize - 1);
                 //                for (auto& it : mem_pool) {
                 //                    std::cout << it.first << ' '
                 //                              << it.second << std::endl;
@@ -271,42 +276,44 @@ class Miner
 
                 // Get random tx by accessing begin. Randomness is created by custom key
                 // which is then hashed and consists of 2 elements: tx_id and miner_id
-                auto mem_pool_it = htab_find_closest(mem_pool, distr(rng));
 
-                if (!htab_iterator_valid(mem_pool_it)) {
+//                auto mem_pool_it = mem_pool->findClosest(distr(rng));
+                auto mem_pool_it = mem_pool->begin();
+
+                if (!mem_pool_it->isValid()) {
                     // Invalid transaction, stop the simulation
                     sim_err_exit_out_of_tx(this);
                 }
 
-                uint64_t id = mem_pool_it.ptr->key_content.txID;
-                uint32_t fee = mem_pool_it.ptr->data;
+                uint64_t id = mem_pool_it->item->keyContent.txID;
+                uint32_t fee = mem_pool_it->item->data;
 
                 tmp_block.txn.push_back(Record{ id, fee });
 
                 log_data_stats("%lld,%u,%d,%d,%d\n", id, fee, tmp_block.id, tmp_block.depth, this->mID);
 
                 //                auto it = mem_pool.find(id);
-                htab_erase(mem_pool, mem_pool_it);
+                mem_pool->erase(mem_pool_it.get());
             }
         } else if (this->type == MALICIOUS) {
             // Malicious miners
 
-            std::vector<htab_item *> sortedMp = getSortedMPDesc();
+            std::vector<HtabItem *> sortedMp = getSortedMPDesc();
             for (int i = 0; i < blockSize; i++) {
                 if (i >= sortedMp.size()) {
                     sim_err_exit_out_of_tx(this);
                 }
 
-                tmp_block.txn.push_back(Record{ sortedMp[i]->key_content.txID, sortedMp[i]->data });
+                tmp_block.txn.push_back(Record{ sortedMp[i]->keyContent.txID, sortedMp[i]->data });
                 //                abc[sortedMp[i].first.tx_id].first = sortedMp[i].second;
                 //                abc[sortedMp[i].first.tx_id].second.push_back(std::tuple<int, int>(depth, mID));
 
-                log_data_stats("%lld,%u,%d,%d,%d\n", sortedMp[i]->key_content.txID, sortedMp[i]->data, tmp_block.id,
+                log_data_stats("%lld,%u,%d,%d,%d\n", sortedMp[i]->keyContent.txID, sortedMp[i]->data, tmp_block.id,
                                tmp_block.depth, this->mID);
 
                 // Remove processed transactions
-                auto it = htab_find(mem_pool, sortedMp[i]->key);
-                htab_erase(mem_pool, it);
+                auto it = mem_pool->find(sortedMp[i]->key);
+                mem_pool->erase(it.get());
             }
 
             // blocks_copy->push_back(tmp_block);
@@ -347,10 +354,10 @@ class Miner
 
             // update local mempool
             for (auto &elem : b.txn) {
-                auto mempool_processed_tx_it = htab_find(mem_pool, { .minerID = this->mID, .txID = elem.id });
+                auto mempool_processed_tx_it = mem_pool->find({ .minerID = (uint32_t)this->mID, .txID = elem.id });
 
-                if (htab_iterator_valid(mempool_processed_tx_it)) {
-                    htab_erase(mem_pool, mempool_processed_tx_it);
+                if (mempool_processed_tx_it->isValid()) {
+                    mem_pool->erase(mempool_processed_tx_it.get());
                 }
             }
             RelayChain(this, s, b, latency);
@@ -420,16 +427,16 @@ class Miner
             if (honest_miner_id != -1) {
                 Miner *honest_miner = miners.at(honest_miner_id);
                 log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id,
-                             htab_size(honest_miner->mem_pool),
-                             ((double)htab_size(honest_miner->mem_pool) / max_mp_size) * 100.0);
+                             mem_pool->size(),
+                             ((double)mem_pool->size() / max_mp_size) * 100.0);
             }
 
             if (malicious_miner_id != -1) {
                 // Print mempool fullness for 1st malicious miner (if exists)
                 Miner *malicious_miner = miners.at(malicious_miner_id);
                 log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id,
-                             htab_size(malicious_miner->mem_pool),
-                             ((double)htab_size(malicious_miner->mem_pool) / max_mp_size) * 100.0);
+                             mem_pool->size(),
+                             ((double)mem_pool->size() / max_mp_size) * 100.0);
             }
 
             log_progress("\n");
@@ -437,7 +444,7 @@ class Miner
             last_progress_time = curr_time;
 
             for (auto miner : miners) {
-                log_mempool("%d,%d,%ld\n", miner->mID, progress, htab_size(miner->mem_pool));
+                log_mempool("%d,%d,%ld\n", miner->mID, progress, mem_pool->size());
             }
 
             // ===================================== Optimization experiment code =====================================

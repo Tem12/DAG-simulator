@@ -4,7 +4,7 @@
 * @author Tomas Hladky <xhladk15@stud.fit.vutbr.cz>
 * @author Martin Peresini <iperesini@fit.vut.cz>
 * @date 2021 - 2022
- */
+*/
 /*
 * Copyright (C) BUT Security@FIT, 2021 - 2022
 *
@@ -40,7 +40,7 @@
 * otherwise) arising in any way out of the use of this software, even
 * if advised of the possibility of such damage.
 *
- */
+*/
 
 #include <cstdio>
 #include <cstdarg>
