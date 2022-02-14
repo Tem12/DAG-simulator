@@ -97,6 +97,8 @@ double max_tx_gen_secs = 0.0; // Maximum seconds of simulation time to
 
 int blockSize = 0; // How many transactions contains each block
 
+double lambda = 0.0;
+
 int config_variant_id = 0;
 int run_id = 0;
 
@@ -148,15 +150,14 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
     boost::random::variate_generator<boost::random::mt19937 &, boost::random::exponential_distribution<>> fee_gen(
         rng, boost::random::exponential_distribution<>(1.0));
 
-    double lambda = 150.0;
+    double gen_lambda = 150.0;
     // gen 1000 txs at the beginning of simulation to everybody's mempool
     if (txID < 1) {
         for (int i = 0; i < 1000; i++) {
-            auto in = fee_gen() * lambda;
+            auto in = fee_gen() * gen_lambda;
             // int in = distr(rng);
             for (auto miner : miners) {
-                auto htab_it =
-                    miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
+                auto htab_it = miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
                 htab_it->setValue((uint32_t)in);
             }
             txID++;
@@ -188,13 +189,12 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
     // gen 65 transactions
     for (int i = 0; i < txsz; i++) {
         // int in = distr(rng);
-        auto in = fee_gen() * lambda;
+        auto in = fee_gen() * gen_lambda;
         for (auto miner : miners) {
             if (miner->mem_pool->size() + txsz > max_mp_size) {
                 miner->RemoveMP(txsz);
             }
-            auto htab_it =
-                miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
+            auto htab_it = miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
             htab_it->setValue((uint32_t)in);
         }
         txID++;
@@ -225,7 +225,6 @@ int run_simulation(boost::random::mt19937 &rng, std::vector<Miner *> &miners)
 
     // This loops primes the simulation with n_blocks being found at random
     // intervals starting from t=0:
-    double lambda = 20.0;
     double t = 0.0;
     for (int i = 0; i < n_blocks; i++) {
         int which_miner = dist(rng);
@@ -289,6 +288,7 @@ int main(int argc, char **argv)
         "max_tx_gen_secs", po::value<double>(&max_tx_gen_secs)->default_value(5.0),
         "maximum seconds of simulation time to generate new transactions")(
         "block_size", po::value<int>(&blockSize)->default_value(100), "transactions count in each block")(
+        "lambda", po::value<double>(&lambda)->default_value(20.0), "lambda used in simulation")(
         "run_id", po::value<int>(&run_id)->default_value(0),
         "run id for optimization experiment")("config_variant_id", po::value<int>(&config_variant_id)->default_value(0),
                                               "config id for optimization experiment")(
