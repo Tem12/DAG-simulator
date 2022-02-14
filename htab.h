@@ -74,7 +74,6 @@ class Htab {
     size_t bucketCount();
     std::shared_ptr<HtabIterator> end();
     void erase(HtabIterator *it);
-//    size_t hashFun(HtabKeyContent htabKeyContent);
     size_t hashFun(const std::string &str);
     std::shared_ptr<HtabIterator> find(const std::string &itemKey);
     std::shared_ptr<HtabIterator> find(HtabKeyContent key_content);

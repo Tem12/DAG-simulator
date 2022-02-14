@@ -170,22 +170,11 @@ void Htab::erase(HtabIterator *it)
 
     this->itemCount--;
     delete it->item;
-//    this->app.erase(std::remove(this->app.begin(), this->app.end(), it->item), this->app.end());
-
-//    auto itr = std::find_if(this->app.begin(),
-//                            this->app.end(),
-//                            [it](auto &element) { return element.get() == it->item;});
-
-//    this->app.erase(itr);
 }
 
 size_t Htab::hashFun(const std::string &str)
 {
-    uint32_t h = 0;
-    const unsigned char *p;
-    for (p = (const unsigned char *)str.c_str(); *p != '\0'; p++)
-        h = 65599 * h + *p;
-    return h;
+    return std::hash<std::string>{}(str);
 }
 
 std::shared_ptr<HtabIterator> Htab::find(const std::string &itemKey)
