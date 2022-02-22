@@ -15,12 +15,14 @@ def main():
 
     # ================= Read metadata =================
     read_config = False
+    read_seed = False
     read_blocks = False
     read_block_size = False
 
     blocks = 0
     block_size = 0
     config = ''
+    seed = 0
 
     if not os.path.exists(args.data):
         print('Specified path to data file does not exists', file=sys.stderr)
@@ -51,12 +53,15 @@ def main():
     with open(metadata_path, 'r') as metadata_file:
         for row in metadata_file:
             value = row.rstrip('\n')
-            if read_config and read_blocks and read_block_size:
+            if read_config and read_seed and read_blocks and read_block_size:
                 break
 
             if value.startswith('cfg_path='):
                 config = value[len('cfg_path='):]
                 read_config = True
+            elif value.startswith('seed='):
+                seed = int(value[len('seed='):])
+                read_seed = True
             elif value.startswith('blocks='):
                 blocks = int(value[len('blocks='):])
                 read_blocks = True
@@ -66,6 +71,10 @@ def main():
 
     if not read_config:
         print(f'Metadata does not contain config path', file=sys.stderr)
+        exit(1)
+
+    if not read_seed:
+        print(f'Metadata does not contain seed', file=sys.stderr)
         exit(1)
 
     if not read_blocks:
@@ -78,13 +87,15 @@ def main():
 
     # =================================================
 
-    total_count = blocks * block_size
+    tx_count = blocks * block_size
 
     df = pd.read_csv(args.data)
 
+    # Store id of transaction as key with number of occururences as value
     txs = {}
 
-    count_0 = 0  # transactions that have not been processed during simulation
+    duplicate_tx_count = 0
+
     count_1 = 0  # transactions that appears only once in all blocks
     count_2 = 0  # 2x transaction duplication
     count_3 = 0  # 3x transaction duplicition
@@ -93,7 +104,7 @@ def main():
     count_more = 0  # more that 5x transaction duplication
 
     # Iterate all transactions to get how many times each of them appears in blocks
-    for i in range(0, total_count):
+    for i in range(0, tx_count):
         tx_id = df['TransactionID'][i]
         if tx_id in txs:
             if txs[tx_id] == 1:
@@ -116,41 +127,38 @@ def main():
             txs[tx_id] = 1
             count_1 += 1
 
-    count_0 = total_count - count_1 - count_2 - \
+    duplicate_tx_count = tx_count - count_1 - count_2 - \
         count_3 - count_4 - count_5 - count_more
 
     if not args.csv:
         print(f'Data: {args.data}')
         print(f'Config: {config}')
+        print(f'Seed: {seed}')
 
         print(
-            f'0 tx count (not processed): {count_0} ({round(count_0 / total_count * 100, 2)}%)')
+            f'Pure duplicated transactions: {duplicate_tx_count} ({round(duplicate_tx_count / tx_count * 100, 2)}%)')
         print(
-            f'1 tx count (unique): {count_1} ({round(count_1 / total_count * 100, 2)}%)')
+            f'1 tx count (unique): {count_1} ({round(count_1 / tx_count * 100, 2)}%)')
         print(
-            f'2 tx count: {count_2} ({round(count_2 / total_count * 100, 2)}%)')
+            f'2 tx count: {count_2} ({round(count_2 / tx_count * 100, 2)}%)')
         print(
-            f'3 tx count: {count_3} ({round(count_3 / total_count * 100, 2)}%)')
+            f'3 tx count: {count_3} ({round(count_3 / tx_count * 100, 2)}%)')
         print(
-            f'4 tx count: {count_4} ({round(count_4 / total_count * 100, 2)}%)')
+            f'4 tx count: {count_4} ({round(count_4 / tx_count * 100, 2)}%)')
         print(
-            f'5 tx count: {count_5} ({round(count_5 / total_count * 100, 2)}%)')
+            f'5 tx count: {count_5} ({round(count_5 / tx_count * 100, 2)}%)')
         print(
-            f'More count: {count_more} ({round(count_more / total_count * 100, 2)}%)')
-        print(
-            f'Duplicates (2 tx count or more): {round((total_count - count_0 - count_1) / total_count * 100, 2)}%')
-        print(
-            f'Duplicates with 0 count: {round((total_count - count_1) / total_count * 100, 2)}%')
+            f'More count: {count_more} ({round(count_more / tx_count * 100, 2)}%)')
     else:
         # Output format: (each value is only in percentage format)
-        # {data_path},{config_path},{0_tx_count},{1_tx_count},{2_tx_count},{3_tx_count},{4_tx_count},{5_tx_count},{more_tx_count},{duplicates_2tx_or_more},{duplicates_0_count}
+        # {data_path},{config_path},{seed},{0_tx_count},{1_tx_count},{2_tx_count},{3_tx_count},{4_tx_count},{5_tx_count},{more_tx_count}
         #
         # Example:
-        # outputs/data_mining_topo.cfg_0000.csv,mining_topo.cfg,39.5916,27.696,26.4726,5.64,0.5622,0.0358,0.0018,32.7124,72.3
-        print(f'{args.data},{config},{round(count_0 / total_count * 100, 4)},{round(count_1 / total_count * 100, 4)},{round(count_2 / total_count * 100, 4)},{round(count_3 / total_count * 100, 4)},{round(count_4 / total_count * 100, 4)},{round(count_5 / total_count * 100, 4)},{round(count_more / total_count * 100, 4)},{round((total_count - count_0 - count_1) / total_count * 100, 4)},{round((total_count - count_1) / total_count * 100, 2)}')
+        # outputs/data_mining_topo.cfg_0000.csv,mining_topo.cfg,512,39.5916,27.696,26.4726,5.64,0.5622,0.0358,0.0018
+        print(f'{args.data},{config},{seed},{round(duplicate_tx_count / tx_count * 100, 4)},{round(count_1 / tx_count * 100, 4)},{round(count_2 / tx_count * 100, 4)},{round(count_3 / tx_count * 100, 4)},{round(count_4 / tx_count * 100, 4)},{round(count_5 / tx_count * 100, 4)},{round(count_more / tx_count * 100, 4)}')
 
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -15,6 +15,7 @@ def main():
 
     # ================= Read metadata =================
     read_config = False
+    read_seed = False
     read_blocks = False
     read_block_size = False
     read_miners_honest = False
@@ -23,6 +24,7 @@ def main():
     blocks = 0
     block_size = 0
     config = ''
+    seed = 0
     miners_count = 0
 
     if not os.path.exists(args.data):
@@ -54,12 +56,15 @@ def main():
     with open(metadata_path, 'r') as metadata_file:
         for row in metadata_file:
             value = row.rstrip('\n')
-            if read_config and read_blocks and read_block_size and read_miners_honest and read_miners_malicious:
+            if read_config and read_seed and read_blocks and read_block_size and read_miners_honest and read_miners_malicious:
                 break
 
             if value.startswith('cfg_path='):
                 config = value[len('cfg_path='):]
                 read_config = True
+            elif value.startswith('seed='):
+                seed = int(value[len('seed='):])
+                read_seed = True
             elif value.startswith('blocks='):
                 blocks = int(value[len('blocks='):])
                 read_blocks = True
@@ -77,6 +82,10 @@ def main():
         print(f'Metadata does not contain config path', file=sys.stderr)
         exit(1)
 
+    if not read_seed:
+        print(f'Metadata does not contain seed', file=sys.stderr)
+        exit(1)
+
     if not read_blocks:
         print(f'Metadata does not contain number of blocks', file=sys.stderr)
         exit(1)
@@ -89,17 +98,25 @@ def main():
 
     malicious_miners_indexes = parse_config(config)
 
-    tx_num = blocks * block_size
+    tx_count = blocks * block_size
 
     miners_profit = [0] * miners_count
 
+    # Store total profit gained in simulation by all miners for next calculations
+    total_profit = 0
+
+    # Store transaction ids of all processed transactions
+    processed_tx = {}
+
     df = pd.read_csv(args.data)
 
-    total_profit = 0
-    for i in range(0, tx_num):
-        minerId = df['MinerID'][i]
-        miners_profit[minerId] += df['Fee'][i]
-        total_profit += df['Fee'][i]
+    for i in range(0, tx_count):
+        tx_id = df['TransactionID'][i]
+        if tx_id not in processed_tx:
+            minerId = df['MinerID'][i]
+            miners_profit[minerId] += df['Fee'][i]
+            total_profit += df['Fee'][i]
+            processed_tx[tx_id] = None  # Mark transaction as processed
 
     malicious_miners_perc_profit = 0
 
@@ -112,6 +129,7 @@ def main():
     if not args.csv:
         print(f'Data: {args.data}')
         print(f'Config: {config}')
+        print(f'Seed: {seed}')
 
         print(
             f'Honest miners profit: {round(100 - malicious_miners_perc_profit, 2)}%')
@@ -122,12 +140,12 @@ def main():
             print(f'Malicious miner #{i} profit: {miner_perc_profit}%')
     else:
         # Output format: (each value is only in percentage format)
-        # {data_path},{config_path},{honest_miners_perc_profit}{malicious_miner[0]_perc_profit}{malicious_miner[1]_perc_profit}{...}
+        # {data_path},{config_path},{seed},{honest_miners_perc_profit}{malicious_miner[0]_perc_profit}{malicious_miner[1]_perc_profit}{...}
         #
         # Example:
-        # outputs/data_mining_topo.cfg_0000.csv,mining_topo.cfg,28.8292,35.0043,36.1665
+        # outputs/data_mining_topo.cfg_0000.csv,mining_topo.cfg,512,28.8292,35.0043,36.1665
         print(
-            f'{args.data},{config},{round(100 - malicious_miners_perc_profit, 4)}', end='')
+            f'{args.data},{config},{seed},{round(100 - malicious_miners_perc_profit, 4)}', end='')
 
         for i in range(len(malicious_miners_indexes)):
             miner_perc_profit = round(
@@ -154,5 +172,5 @@ def parse_config(file_path):
     return malicious_miners_indexes
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
