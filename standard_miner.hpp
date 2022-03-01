@@ -159,13 +159,12 @@ class Miner
     // Return a random double in the range passed.
     typedef boost::function<double(double, double)> JitterFunction;
 
-    Miner(double _hash_fraction, double _block_latency, miner_type _type, JitterFunction _func)
-        : hash_fraction(_hash_fraction), type(_type), block_latency(_block_latency), jitter_func(_func), mID(nextID++)
+    Miner(double _hash_fraction, miner_type _type) : hash_fraction(_hash_fraction), type(_type), mID(nextID++)
     {
         // best_chain = std::make_shared<std::vector<int>>();
 
-//        mem_pool = new Htab((size_t)max_mp_size);
-        //std::unique_ptr<Htab> _mempool(new Htab((size_t)max_mp_size));
+        //        mem_pool = new Htab((size_t)max_mp_size);
+        // std::unique_ptr<Htab> _mempool(new Htab((size_t)max_mp_size));
         mem_pool_ptr = std::make_shared<Htab>(static_cast<size_t>(max_mp_size));
         mem_pool = mem_pool_ptr.get();
         blocks = std::make_shared<std::vector<Block>>();
@@ -277,7 +276,7 @@ class Miner
                 // Get random tx by accessing begin. Randomness is created by custom key
                 // which is then hashed and consists of 2 elements: tx_id and miner_id
 
-//                auto mem_pool_it = mem_pool->findClosest(distr(rng));
+                //                auto mem_pool_it = mem_pool->findClosest(distr(rng));
                 auto mem_pool_it = mem_pool->begin();
 
                 if (!mem_pool_it->isValid()) {
@@ -325,8 +324,7 @@ class Miner
         // time "
         //           << s.getSimTime() << "\n";
 #endif
-        // RelayChain(this, s, blocks_copy, tmp_block, block_latency);
-        RelayChain(this, s, tmp_block, block_latency);
+        RelayChain(this, s, tmp_block);
     }
 
     virtual void ConsiderChain(Miner *from, CScheduler &s,
@@ -360,11 +358,8 @@ class Miner
                     mem_pool->erase(mempool_processed_tx_it.get());
                 }
             }
-            RelayChain(this, s, b, latency);
-        } // else -> found
-          // RelayChain(from, s, blcks, b, latency);
-          // RelayChain(this, s, b, latency);
-          // }
+            RelayChain(this, s, b);
+        }
 
         // Check if all blocks were processed by all miners, if yes stop the simulation
         if (b.id == n_blocks - 1) {
@@ -376,10 +371,7 @@ class Miner
         }
     }
 
-    virtual void RelayChain(Miner *from, CScheduler &s,
-                            // std::shared_ptr<std::vector<int>> chain,
-                            // std::shared_ptr<std::vector<Block>> blcks,
-                            Block &b, double latency)
+    virtual void RelayChain(Miner *from, CScheduler &s, Block &b)
     {
         for (auto &&peer : peers) {
             // if (peer.chain_tip == chain->back()) continue; // Already relayed
@@ -387,19 +379,12 @@ class Miner
             if (peer.peer == from)
                 continue; // don't relay to peer that just sent it!
 
-            double jitter = 0;
-            if (peer.latency > 0)
-                jitter = jitter_func(-peer.latency / 1000., peer.latency / 1000.);
-            double tPeer = s.getSimTime() + peer.latency + jitter + latency;
-            // auto f = boost::bind(&Miner::ConsiderChain, peer.peer, from,
-            // boost::ref(s),
-            //                      blcks, b, block_latency);
+            double tPeer = s.getSimTime() + peer.latency;
 
-            auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this, boost::ref(s), b, block_latency);
+            auto f = boost::bind(&Miner::ConsiderChain, peer.peer, this, boost::ref(s), b, peer.latency);
             s.schedule(f, tPeer);
         }
 
-        // TODO: b.id is not synced, some block can occur lately than some fewer (eg. 22 before 20)
         if (from->mID == 0 && (b.id + 1) * 100 / n_blocks > progress) {
             progress++;
 
@@ -426,16 +411,14 @@ class Miner
             // Print mempool fullness for 1st honest miner (if exists)
             if (honest_miner_id != -1) {
                 Miner *honest_miner = miners.at(honest_miner_id);
-                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id,
-                             mem_pool->size(),
+                log_progress("\t| Honest miner[%d] - %ld (%.2f%%)\t", honest_miner_id, mem_pool->size(),
                              ((double)mem_pool->size() / max_mp_size) * 100.0);
             }
 
             if (malicious_miner_id != -1) {
                 // Print mempool fullness for 1st malicious miner (if exists)
                 Miner *malicious_miner = miners.at(malicious_miner_id);
-                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id,
-                             mem_pool->size(),
+                log_progress("\t| Malicious miner[%d] - %ld (%.2f%%)", malicious_miner_id, mem_pool->size(),
                              ((double)mem_pool->size() / max_mp_size) * 100.0);
             }
 
@@ -483,19 +466,10 @@ class Miner
     {
         return hash_fraction;
     }
-
-    const double GetBlockLatency() const
-    {
-        return block_latency;
-    }
     // std::vector<int> GetBestChain() const { return *best_chain; }
 
   protected:
     double hash_fraction; // This miner has hash_fraction of hash rate
-    // This miner produces blocks that take block_latency seconds to
-    // relay/validate
-    double block_latency;
-    JitterFunction jitter_func;
 
     // std::shared_ptr<std::vector<int>> best_chain;
     std::list<PeerInfo> peers;

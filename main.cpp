@@ -72,10 +72,11 @@
 #include <dirent.h>
 
 #include "standard_miner.hpp"
+#include "block_propagation_distribution.h"
 
-#define TOTAL_HASHPOWER_EPS 0.000001 // max deviation of valid hashpower
+#define TOTAL_HASHPOWER_EPS 0.000001 // max deviation of total hashpower of all miners
 #define DATA_OUTPUT_DIR "outputs" // name of the directory for output files
-#define DATA_OUTPUT_MAX_RUN_ID 1000
+#define DATA_OUTPUT_MAX_RUN_ID 9999
 
 std::string config_file_path;
 std::string config_filename;
@@ -267,16 +268,13 @@ int main(int argc, char **argv)
 {
     namespace po = boost::program_options;
 
-    double block_latency = 1.0;
     int n_runs = 1;
     int rng_seed = 0;
 
     po::options_description desc("Command-line options");
     desc.add_options()("help", "show options")("blocks", po::value<int>(&n_blocks)->default_value(10000),
                                                "number of blocks to simulate")(
-        "latency", po::value<double>(&block_latency)->default_value(5.0),
-        "block relay/validate latency (in seconds) to simulate")("runs", po::value<int>(&n_runs)->default_value(1),
-                                                                 "number of times to run simulation")(
+        "runs", po::value<int>(&n_runs)->default_value(1), "number of times to run simulation")(
         "rng_seed", po::value<int>(&rng_seed)->default_value(4544), "random number generator seed")(
         "max_mp_size", po::value<int>(&max_mp_size)->default_value(10000),
         "maximum mempool size for each miner")("min_tx_gen_size", po::value<int>(&min_tx_gen_size)->default_value(40),
@@ -337,6 +335,9 @@ int main(int argc, char **argv)
     int honest_miners = 0;
     double malicious_hashpower = 0.0;
     double honest_hashpower = 0.0;
+    double latency = 0.0;
+
+    std::discrete_distribution<> block_prop_delay_distr(block_prop_delay_data);
 
     for (auto m : vm["miner"].as<std::vector<std::string>>()) {
         std::vector<std::string> v;
@@ -347,20 +348,19 @@ int main(int argc, char **argv)
         }
         double hashpower = atof(v[0].c_str());
         totalHashpower += hashpower;
-        double latency = block_latency;
+
         if (v.size() > 2) {
             latency = atof(v[2].c_str());
         }
         if (v[1] == "honest") {
-            miners.push_back(new Miner(hashpower, latency, HONEST, boost::bind(random_real, boost::ref(rng), _1, _2)));
+            miners.push_back(new Miner(hashpower, HONEST));
             honest_miners++;
             honest_hashpower += hashpower;
             if (honest_miner_id == -1) {
                 honest_miner_id = miners.back()->mID;
             }
         } else if (v[1] == "malicious") {
-            miners.push_back(
-                new Miner(hashpower, latency, MALICIOUS, boost::bind(random_real, boost::ref(rng), _1, _2)));
+            miners.push_back(new Miner(hashpower, MALICIOUS));
             malicious_miners++;
             malicious_hashpower += hashpower;
             if (malicious_miner_id == -1) {
@@ -383,25 +383,27 @@ int main(int argc, char **argv)
     for (auto m : c) {
         std::vector<std::string> v;
         boost::split(v, m, boost::is_any_of(" \t,"));
-        if (v.size() < 3) {
+        if (v.size() < 2) {
             std::cout << "Couldn't parse biconnect description: " << m << "\n";
             continue;
         }
         int m1 = atoi(v[0].c_str());
         int m2 = atoi(v[1].c_str());
-        double latency = atof(v[2].c_str());
+
+        double latency;
+        if (v.size() == 2) {
+            latency = block_prop_delay_distr(rng) / 1000.0;
+        }
+        else {
+            latency = atof(v[2].c_str()) / 1000.0;
+        }
+
         if (m1 >= miners.size() || m2 >= miners.size()) {
             std::cout << "Couldn't parse biconnect description: " << m << "\n";
             continue;
         }
         Connect(miners[m1], miners[m2], latency);
     }
-
-    //    std::cout << "Simulating " << n_blocks << " blocks, default latency " << block_latency << "secs, ";
-    //    std::cout << "with " << miners.size() << " miners over " << n_runs << " runs\n";
-    //    if (vm.count("description")) {
-    //        std::cout << "Configuration: " << vm["description"].as<std::string>() << "\n";
-    //    }
 
     // ===================================== Optimization experiment code =====================================
     //    time_est_filename.append(std::to_string(config_variant_id))
@@ -454,7 +456,7 @@ int main(int argc, char **argv)
         closedir(dir);
     }
 
-    for (int i = 0; i < DATA_OUTPUT_MAX_RUN_ID; i++) {
+    for (int i = 0; i <= DATA_OUTPUT_MAX_RUN_ID; i++) {
         std::string search_filename = DATA_OUTPUT_DIR;
         sprintf(sim_run_id_str, "%04d", i);
         search_filename.append("/progress_").append(config_filename).append("_").append(sim_run_id_str).append(".out");
@@ -523,18 +525,17 @@ int main(int argc, char **argv)
                  "Blocks: %d\n"
                  "Malicious miners: %d (%.2lf%% power)\n"
                  "Honest miners: %d (%.2lf%% power)\n"
-                 "Block latency: %.2lf secs\n"
                  "Random seed: %d\n"
                  "Max mempool size: %d txs\n"
                  "Block size: %d txs\n"
-                 "Min. transaction generate speed: %.2lf secs\n"
-                 "Max. transaction generate speed: %.2lf secs\n"
+                 "Min. transaction generate speed: %.2lf sec\n"
+                 "Max. transaction generate speed: %.2lf sec\n"
                  "Min. transaction generate size: %d\n"
                  "Max. transaction generate size: %d\n"
                  "========================================================\n",
                  config_filename.c_str(), sim_run_id_str, config_full_path.c_str(), n_blocks, malicious_miners,
-                 malicious_hashpower * 100, honest_miners, honest_hashpower * 100, block_latency, rng_seed, max_mp_size,
-                 blockSize, min_tx_gen_secs, max_tx_gen_secs, min_tx_gen_size, max_tx_gen_size);
+                 malicious_hashpower * 100, honest_miners, honest_hashpower * 100, rng_seed, max_mp_size, blockSize,
+                 min_tx_gen_secs, max_tx_gen_secs, min_tx_gen_size, max_tx_gen_size);
 
     // Create headers in csv files
     log_mempool("MinerID,Progress,MempoolSize\n");
@@ -546,14 +547,13 @@ int main(int argc, char **argv)
                  "blocks=%d\n"
                  "seed=%d\n"
                  "block_size=%d\n"
-                 "block_latency=%.5lf\n"
                  "max_mempool_size=%d\n"
                  "malicious_miners=%d\n"
                  "honest_miners=%d\n"
                  "malicious_power=%.5lf\n"
                  "honest_power=%.5lf\n",
                  config_filename.c_str(), sim_run_id_str, config_full_path.c_str(), n_blocks, rng_seed, blockSize,
-                 block_latency, max_mp_size, malicious_miners, honest_miners, malicious_hashpower, honest_hashpower);
+                 max_mp_size, malicious_miners, honest_miners, malicious_hashpower, honest_hashpower);
 
     // ========================================================
     // Print 0% progress
@@ -636,9 +636,8 @@ void sim_err_exit_out_of_tx(Miner *miner)
     log_progress("============================= End of snapshot =============================\n");
     log_progress("Simulation error: Miner[%d] was chosen to generate block but has run out of transactions\n",
                  miner->mID);
-    log_progress("Miner[%d] - %s with %.2lf%% hashpower and block latency %.2lf secs\n", miner->mID,
-                 miner->type == HONEST ? "Honest" : "Malicious", miner->GetHashFraction() * 100,
-                 miner->GetBlockLatency());
+    log_progress("Miner[%d] - %s with %.2lf%% hashpower\n", miner->mID, miner->type == HONEST ? "Honest" : "Malicious",
+                 miner->GetHashFraction() * 100);
 
     // Close logging files
     fclose(progress_file);
