@@ -103,6 +103,8 @@ double lambda = 0.0;
 int config_variant_id = 0;
 int run_id = 0;
 
+bool honest_random_remove = false;
+
 // Global vars for logging
 std::vector<Miner *> miners;
 int honest_miner_id = -1;
@@ -193,7 +195,11 @@ void mempool_update(boost::random::mt19937 &rng, std::vector<Miner *> &miners, C
         auto in = fee_gen() * gen_lambda;
         for (auto miner : miners) {
             if (miner->mem_pool->size() + txsz > max_mp_size) {
-                miner->RemoveMP(txsz);
+                if (honest_random_remove && miner->type == HONEST) {
+                    miner->RemoveMPRandom(txsz, rng);
+                } else {
+                    miner->RemoveMP(txsz);
+                }
             }
             auto htab_it = miner->mem_pool->insert({ .minerID = (uint32_t)miner->mID, .txID = txID });
             htab_it->setValue((uint32_t)in);
@@ -290,6 +296,8 @@ int main(int argc, char **argv)
         "run_id", po::value<int>(&run_id)->default_value(0),
         "run id for optimization experiment")("config_variant_id", po::value<int>(&config_variant_id)->default_value(0),
                                               "config id for optimization experiment")(
+        "honest-random-remove",
+        "on enabled honest miners will remove transactions randomly when their mempool is full")(
         "config", po::value<std::string>(&config_file_path)->default_value("mining.cfg"), "Mining config filename");
     po::variables_map vm;
 
@@ -319,6 +327,10 @@ int main(int argc, char **argv)
         std::cout << desc << "\n";
         std::cout << config << "\n";
         return 1;
+    }
+
+    if (vm.count("honest-random-remove")) {
+        honest_random_remove = true;
     }
 
     boost::random::mt19937 rng;
@@ -393,8 +405,7 @@ int main(int argc, char **argv)
         double latency;
         if (v.size() == 2) {
             latency = block_prop_delay_distr(rng) / 1000.0;
-        }
-        else {
+        } else {
             latency = atof(v[2].c_str()) / 1000.0;
         }
 

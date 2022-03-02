@@ -53,6 +53,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <boost/random/mersenne_twister.hpp>
 
 struct HtabKeyContent {
     uint32_t minerID;
@@ -69,7 +70,7 @@ class Htab {
     Htab(size_t n);
     ~Htab();
     std::shared_ptr<HtabIterator> begin();
-    std::shared_ptr<HtabIterator> findClosest(size_t index);
+    std::shared_ptr<HtabIterator> findRandom(boost::random::mt19937 &rng);
     size_t size();
     size_t bucketCount();
     std::shared_ptr<HtabIterator> end();

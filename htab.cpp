@@ -42,7 +42,6 @@
  *
  */
 
-#include <vector>
 #include "htab.h"
 
 HtabItem::HtabItem()
@@ -63,7 +62,8 @@ Htab::Htab(size_t n)
     itemCount = 0;
 }
 
-Htab::~Htab() {
+Htab::~Htab()
+{
     this->clear();
 }
 
@@ -83,8 +83,11 @@ std::shared_ptr<HtabIterator> Htab::begin()
 }
 
 // Try to find the closest item to specified index by iterating up and down
-std::shared_ptr<HtabIterator> Htab::findClosest(size_t index)
+std::shared_ptr<HtabIterator> Htab::findRandom(boost::random::mt19937 &rng)
 {
+    std::uniform_int_distribution<> rand_index_distr(0, (int)this->arrSize - 1);
+    size_t index = rand_index_distr(rng);
+
     std::shared_ptr<HtabIterator> it(new HtabIterator(this, nullptr, 0));
 
     size_t max = (this->arrSize / 2) + 1;
@@ -99,7 +102,7 @@ std::shared_ptr<HtabIterator> Htab::findClosest(size_t index)
         if (this->items[down_i] != nullptr) {
             it->item = this->items[down_i];
             it->idx = down_i;
-            return it;
+            break;
         } else {
             down_i--;
         }
@@ -111,13 +114,34 @@ std::shared_ptr<HtabIterator> Htab::findClosest(size_t index)
         if (this->items[up_i] != nullptr) {
             it->item = this->items[up_i];
             it->idx = up_i;
-            return it;
+            break;
         } else {
             up_i++;
         }
     }
 
-    // No item was found
+    // If some item was found, select random one in selected bucket
+    if (it->item != nullptr) {
+        // Count number of items in bucket
+        int bucketCount = 0;
+        HtabItem *next = it->item;
+
+        while (next != nullptr) {
+            bucketCount++;
+            next = next->next;
+        }
+
+        std::uniform_int_distribution<> bucketSelectionDistr(0, bucketCount - 1);
+        int bucketSelectionIndex = bucketSelectionDistr(rng);
+
+        for (int i = 0; i < bucketSelectionIndex; i++) {
+            it->next();
+        }
+
+//        printf("From size %zu selected index %zu; selected in bucket %d (%d)\n", this->size(), it->idx,
+//               bucketSelectionIndex, bucketCount - 1);
+    }
+
     return it;
 }
 
@@ -229,7 +253,7 @@ std::shared_ptr<HtabIterator> Htab::find(HtabKeyContent key_content)
 void Htab::clear()
 {
     HtabItem *next;
-    for (auto it: this->items) {
+    for (auto it : this->items) {
         next = it;
         while (next != nullptr) {
             next = it->next;

@@ -228,6 +228,16 @@ class Miner
         }
     }
 
+    void RemoveMPRandom(const int size,  boost::random::mt19937 &rng)
+    {
+        std::uniform_int_distribution<> distr(0, (int) mem_pool->size());
+
+        for (int i = 0; i < size; i++) {
+            auto htab_it = mem_pool->findRandom(rng);
+            mem_pool->erase(htab_it.get());
+        }
+    }
+
     virtual void FindBlock(boost::random::mt19937 &rng, CScheduler &s, int blockSize, int blockNumber)
     {
         // Extend the chain:
@@ -260,7 +270,7 @@ class Miner
             // Honest miners
 
             for (int i = 0; i < blockSize; i++) {
-                std::uniform_int_distribution<> distr(0, (int)mem_pool->arrSize - 1);
+                //  std::uniform_int_distribution<> distr(0, (int)mem_pool->arrSize - 1);
                 //                for (auto& it : mem_pool) {
                 //                    std::cout << it.first << ' '
                 //                              << it.second << std::endl;
