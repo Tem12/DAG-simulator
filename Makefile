@@ -1,9 +1,17 @@
-#BOOST_LIBS=-lboost_program_options-mt -lboost_system-mt -lboost_thread-mt -lboost_chrono-mt
-#BOOST_LIBS=-lboost_program_options -lboost_system -lboost_thread -lboost_chrono
-BOOST_LIBS=-lboost_program_options -lboost_system -lboost_thread -lboost_chrono
-CFLAGS=-O2
-#CFLAGS=-g -ggdb -DTRACE
-# CFLAGS=-g -ggdb
+CFLAGS=-Wextra -Wall -pedantic -O2
 
-scheduler: main.cpp scheduler.cpp
-	clang++ -std=c++17 -I/usr/local/include -L/usr/local/lib $(CFLAGS) -o mining_simulator main.cpp scheduler.cpp est_time.cpp log.cpp htab.cpp $(BOOST_LIBS)
+# Please note, that for GNU implementation prior to 9.1 requires linking
+# with -lstdc++fs and LLVM implementation prior to LLVM 9.0 requires linking with -lc++fs.
+# Source: https://en.cppreference.com/w/cpp/filesystem
+#
+# This is by default disabled:
+# LIBS=-lstdc++fs
+
+all:
+	c++ --std=c++17 $(CFLAGS) -o dag-simulator main.cpp ArgParser.cpp Block.cpp ConfigParser.cpp Mempool.cpp Miner.cpp Peer.cpp Scheduler.cpp Simulation.cpp $(LIBS)
+
+doc:
+	doxygen doxygen.cfg
+
+clean:
+	rm -f dag-simulator
