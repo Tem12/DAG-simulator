@@ -10,7 +10,7 @@ def main():
     parser.add_argument('--csv', required=False, action='store_true', dest='csv',
                         help='Output data in csv format for another process')
     parser.add_argument('--power-thold', type=float, required=True,
-                            help='Miners mining power minimum threshold to be included in output')
+                        help='Miners mining power minimum threshold to be included in output')
     parser.add_argument('--no-extra-info', required=False, action='store_true', dest='no_extra_info',
                         help='Script will output only miners profit numbers withou seed, config and data paths')
     parser.add_argument('--split', required=False, action='store_true', dest='split',
@@ -20,6 +20,14 @@ def main():
     parser.add_argument('--halving-boost', required=False, action='store_true', dest='halving_boost',
                         help='Payoff function - Halving with boosting honest behavior by \
                         distributing part of malicious actors\' profit')
+    parser.add_argument('--block-reward', type=float, required=False,
+                            help='Set block rewards (default: 0)', default=0.0)
+    parser.add_argument('--max-tx-occur', type=int, required=False, default=1,
+                        help='Ignore profit from transactions with occur position greater than MAX_TX_OCCUR in \
+                        halving payoff funcion (default: 1)')
+    parser.add_argument('--malicious-penalization', type=float, required=False, default=0.6,
+                        help='Malicious miners penalization in percentage interval <0,1> for halving boost payoff \
+                        function (default: 0.6)')
 
     args = parser.parse_args()
 
@@ -116,14 +124,18 @@ def main():
     tx_count = blocks * block_size
 
     miners_profit = [0] * miners_count
+    miners_block_profit = [0] * miners_count
     miners_collision_sum = [0] * miners_count
     miners_tx_count = [0] * miners_count
 
     # Store total profit gained in simulation by all miners for next calculations
-    total_profit = 0
+    total_profit = args.block_reward * blocks
 
-    # Store transaction ids of all processed transactions
+    # Store ids of all processed transactions
     processed_tx = {}
+
+    # Store ids of all processed blocks
+    processed_blocks = {}
     
     df = pd.read_csv(args.data)
 
@@ -143,6 +155,11 @@ def main():
             miners_profit[minerId] += float(df['Fee'][i]) / processed_tx[tx_id]['count']
             miners_tx_count[minerId] += 1
             miners_collision_sum[minerId] += processed_tx[tx_id]['count']
+
+            block_id = df['BlockID'][i]
+            if block_id not in processed_blocks:
+                processed_blocks[block_id] = True   # Mark block as proccesed
+                miners_block_profit[minerId] += args.block_reward
     elif args.halving:
         # Halving-boost can be also combined halving and burning
 
@@ -172,11 +189,16 @@ def main():
             miners_collision_sum[minerId] += count
 
             # Limit where malicious miners do not earn any reward (this reward will be burned)
-            if minePosition >= 2:
+            if minePosition > args.max_tx_occur:
                 continue
 
             miners_profit[minerId] += fee / 2**minePosition + (fee / 2**count)/count
             processed_tx[tx_id]['position'] += 1
+
+            block_id = df['BlockID'][i]
+            if block_id not in processed_blocks:
+                processed_blocks[block_id] = True   # Mark block as proccesed
+                miners_block_profit[minerId] += args.block_reward
     else:
         # No payoff function
         for i in range(0, tx_count):
@@ -185,6 +207,12 @@ def main():
                 processed_tx[tx_id] = {'fee': df['Fee'][i], 'count': 1}
                 minerId = df['MinerID'][i]
                 miners_profit[minerId] += df['Fee'][i]
+
+                block_id = df['BlockID'][i]
+                if block_id not in processed_blocks:
+                    processed_blocks[block_id] = True   # Mark block as proccesed
+                    miners_block_profit[minerId] += args.block_reward
+
                 total_profit += df['Fee'][i]
             else:
                 processed_tx[tx_id]['count'] += 1
@@ -197,16 +225,16 @@ def main():
 
     ##### Assign profits to honest and malicious that will go to output
     for id in honest_miners:
-        honest_miners[id]['profit'] = miners_profit[id]
+        honest_miners[id]['profit'] = miners_profit[id] + miners_block_profit[id]
         honest_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
 
     for id in malicious_miners:
-        malicious_miners[id]['profit'] = miners_profit[id]
+        malicious_miners[id]['profit'] = miners_profit[id] + miners_block_profit[id]
         malicious_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
 
     if args.halving_boost and len(malicious_miners) > 0:
             # Move X perc. profit from malicious actors to honest as penalization
-            PENALIZATION = 0.6
+            PENALIZATION = args.malicious_penalization
 
             malicious_miners_total_power = 0.0
             for malicious_id in malicious_miners:
