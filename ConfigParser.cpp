@@ -24,7 +24,7 @@ std::vector<Miner> ConfigParser::parseConfig(Simulation &simulation) const {
 	while (std::getline(cfgFile, line)) {
 
 		// Skip comments and empty lines
-		if (line[0] == '#' || line.empty()) {
+		if (line.empty() || line.at(0) == '#') {
 			continue;
 		}
 
