@@ -28,6 +28,12 @@ def main():
     parser.add_argument('--malicious-penalization', type=float, required=False, default=0.6,
                         help='Malicious miners penalization in percentage interval <0,1> for halving boost payoff \
                         function (default: 0.6)')
+    parser.add_argument('--block-tx-reward-avg-inc', required=False, action='store_true', dest='block_tx_reward_avg_inc',
+                        help='Script will also output block average transaction reward only included in miners\' reward. Available only in non-csv format \
+                            and no payoff function')
+    parser.add_argument('--block-tx-reward-avg-non', required=False, action='store_true', dest='block_tx_reward_avg_non',
+                        help='Script will also output block average transaction reward (also from duplicates). Available only in non-csv format \
+                            and no payoff function')
 
     args = parser.parse_args()
 
@@ -139,6 +145,9 @@ def main():
     
     df = pd.read_csv(args.data)
 
+    # Block tx reward (used in block-tx-reward-avg_inc and block-tx-reward-avg_non args)
+    block_rewards = {}
+
     # Process transactions in data
     if args.split:
         for i in range(0, tx_count):
@@ -201,6 +210,7 @@ def main():
                 miners_block_profit[minerId] += args.block_reward
     else:
         # No payoff function
+
         for i in range(0, tx_count):
             tx_id = df['TransactionID'][i]
             if tx_id not in processed_tx:
@@ -214,8 +224,21 @@ def main():
                     miners_block_profit[minerId] += args.block_reward
 
                 total_profit += df['Fee'][i]
+
+                if args.block_tx_reward_avg_inc:
+                    if block_id not in block_rewards:
+                        block_rewards[block_id] = df['Fee'][i]
+                    else:
+                        block_rewards[block_id] += df['Fee'][i]
             else:
                 processed_tx[tx_id]['count'] += 1
+
+            if args.block_tx_reward_avg_non:
+                block_id = df['BlockID'][i]
+                if block_id not in block_rewards:
+                    block_rewards[block_id] = df['Fee'][i]
+                else:
+                    block_rewards[block_id] += df['Fee'][i]
 
         for i in range(0, tx_count):
             tx_id = df['TransactionID'][i]
@@ -276,6 +299,10 @@ def main():
             i += 1
 
         print(f'Profit of the remaining miners: {round(100.0 - profits_sum, 2)}%')
+
+        if args.block_tx_reward_avg_inc or args.block_tx_reward_avg_non:
+
+            print(f'Average block tx fee reward: {sum(list(block_rewards.values())) / len(list(block_rewards.values()))}')
 
     else:
         # Output format: (each value is only in percentage format)
