@@ -3,6 +3,7 @@ import random
 import networkx as nx
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import statistics
 
 # Traverse graph from node X to node Y from all nodes stored in configuration. Do this process n times for groups where:
 # nodes are badly connected (1 - 2 connections)
@@ -62,8 +63,14 @@ def main():
         all_hops.append(hops)
         all_tau.append(tau)
 
+    print('[All] Min number of hops:', min(all_hops))
+    print('[All] Min tau:', min(all_tau) / 1000, 'secs')
+    print('[All] Max number of hops:', max(all_hops))
+    print('[All] Max tau:', max(all_tau) / 1000, 'secs')
+    print('[All] Standard deviation hops:', statistics.stdev(all_hops))
+    print('[All] Standard deviation tau:', statistics.stdev(all_tau) / 1000, 'secs')
     print('[All] Average number of hops:', sum(all_hops) / len(all_hops))
-    print('[All] Average tau:', sum(all_tau) / len(all_tau))
+    print('[All] Average tau:', sum(all_tau) / len(all_tau) / 1000, 'secs')
 
     # =============================================================
     all_hops.clear()
@@ -73,8 +80,14 @@ def main():
         all_hops.append(hops)
         all_tau.append(tau)
 
+    print('[Bad] Min number of hops:', min(all_hops))
+    print('[Bad] Min tau:', min(all_tau) / 1000, 'secs')
+    print('[Bad] Max number of hops:', max(all_hops))
+    print('[Bad] Max tau:', max(all_tau) / 1000, 'secs')
+    print('[Bad] Standard deviation hops:', statistics.stdev(all_hops))
+    print('[Bad] Standard deviation tau:', statistics.stdev(all_tau) / 1000, 'secs')
     print('[Bad] Average number of hops:', sum(all_hops) / len(all_hops))
-    print('[Bad] Average tau:', sum(all_tau) / len(all_tau))
+    print('[Bad] Average tau:', sum(all_tau) / len(all_tau) / 1000, 'secs')
 
     # =============================================================
     all_hops.clear()
@@ -84,8 +97,14 @@ def main():
         all_hops.append(hops)
         all_tau.append(tau)
 
+    print('[Common] Min number of hops:', min(all_hops))
+    print('[Common] Min tau:', min(all_tau) / 1000, 'secs')
+    print('[Common] Max number of hops:', max(all_hops))
+    print('[Common] Max tau:', max(all_tau) / 1000, 'secs')
+    print('[Common] Standard deviation hops:', statistics.stdev(all_hops))
+    print('[Common] Standard deviation tau:', statistics.stdev(all_tau) / 1000, 'secs')
     print('[Common] Average number of hops:', sum(all_hops) / len(all_hops))
-    print('[Common] Average tau:', sum(all_tau) / len(all_tau))
+    print('[Common] Average tau:', sum(all_tau) / len(all_tau) / 1000, 'secs')
 
     # =============================================================
     all_hops.clear()
@@ -95,8 +114,14 @@ def main():
         all_hops.append(hops)
         all_tau.append(tau)
 
+    print('[Well] Min number of hops:', min(all_hops))
+    print('[Well] Min tau:', min(all_tau) / 1000, 'secs')
+    print('[Well] Max number of hops:', max(all_hops))
+    print('[Well] Max tau:', max(all_tau) / 1000, 'secs')
+    print('[Well] Standard deviation hops:', statistics.stdev(all_hops))
+    print('[Well] Standard deviation tau:', statistics.stdev(all_tau) / 1000, 'secs')
     print('[Well] Average number of hops:', sum(all_hops) / len(all_hops))
-    print('[Well] Average tau:', sum(all_tau) / len(all_tau))
+    print('[Well] Average tau:', sum(all_tau) / len(all_tau) / 1000, 'secs')
 
 def traverse_graph(g: nx.Graph, seq) -> tuple[int, int]:
     randomPair = random.sample(seq, 2)  # Two node ids without duplicate
