@@ -40,11 +40,10 @@ def main():
 
                 G.add_edge(node1, node2, weight=delay)
 
-    nx.draw_networkx(G)
+    pos = nx.spring_layout(G, k=0.15, iterations=50)
+    nx.draw_networkx(G, pos=pos)
 
-    # Set margins for the axes so that nodes aren't clipped
     ax = plt.gca()
-    ax.margins(0.20)
     plt.axis("off")
     plt.savefig('./vizualization.pdf')
 
