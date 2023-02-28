@@ -5,6 +5,7 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser()
+parser.add_argument('-f', "--file", help="config name to create", type=str, default="config_test.cfg")
 parser.add_argument('-h', "--honest", help="number of honest miners", type=int, default=0)
 parser.add_argument('-m', "--malicious", help="number of malicious miners", type=int, default=0)
 parser.add_argument('-k', "--kaspa", help="number of kaspa-like miners", type=int, default=0)
@@ -18,6 +19,9 @@ args = parser.parse_args()
 
 total_power = args.honest_power + args.malicious_power + args.kaspa_power
 total = args.honest + args.malicious + args.kaspa
+if args.file == "":
+    print("No file specified")
+    sys.exit(0)
 if total_power == 0:
     print("No power specified")
     sys.exit(0)
@@ -32,12 +36,12 @@ honest_power = args.honest_power / total
 malicious_power = args.malicious_power / total
 kaspa_power = args.kaspa_power / total
 
-if os.path.exists("./config_test.cfg"):
-    os.remove("./config_test.cfg")
+if os.path.exists(f"./{args.file}"):
+    os.remove(f"./{args.file}")
 
-open("config_test.cfg", "w+").close() # creates the file
+open(f"{args.file}", "w+").close()  # creates the file
 
-with open("config_test.cfg", "r+") as f:
+with open(f"{args.file}", "r+") as f:
     kaspas = 0
     honests = 0
     malicious = 0
