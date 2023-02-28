@@ -21,7 +21,8 @@
 
 enum MinerType {
 	HONEST,
-	MALICIOUS
+	MALICIOUS,
+    KASPA_LIKE
 };
 
 class Simulation;

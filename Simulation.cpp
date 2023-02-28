@@ -203,6 +203,7 @@ void Simulation::printSimulationStart() {
 
 	double honestMinersPower = 0;
 	double maliciousMinersPower = 0;
+	double kaspaMinersPower = 0;
 
 	int i = 0;
 	for (auto &miner: miners) {
@@ -224,6 +225,15 @@ void Simulation::printSimulationStart() {
 				firstMaliciousMinerIndex = i;
 			}
 		}
+		else if (miner.getType() == KASPA_LIKE) {
+			kaspalikeMinersCount++;
+			kaspaMinersPower += miner.getMiningPower();
+
+			if (!kaspalikeMinerIndexSet) {
+				kaspalikeMinerIndexSet = true;
+				firstKaspalikeMinerIndex = i;
+			}
+		}
 		i++;
 	}
 
@@ -237,6 +247,8 @@ void Simulation::printSimulationStart() {
 	   << honestMinersPower * 100 << "% power)" << std::endl
 	   << "Malicious miners: " << maliciousMinersCount << " (" << std::fixed << std::setprecision(2)
 	   << maliciousMinersPower * 100 << "% power)" << std::endl
+	   << "Kaspa-like miners: " << kaspalikeMinersCount << " (" << std::fixed << std::setprecision(2)
+	   << kaspaMinersPower * 100 << "% power)" << std::endl
 	   << "Seed: " << seed << std::endl
 	   << "Mempool capacity: " << mpCapacity << std::endl
 	   << "Block size: " << blockSize << std::endl
@@ -265,8 +277,10 @@ void Simulation::printSimulationStart() {
 	               << "block_size=" << blockSize << std::endl
 	               << "mempool_capacity=" << mpCapacity << std::endl
 	               << "malicious_miners=" << maliciousMinersCount << std::endl
+				   << "kaspalike_miners=" << kaspalikeMinersCount << std::endl
 	               << "honest_miners=" << honestMinersCount << std::endl
 	               << "malicious_power=" << std::fixed << std::setprecision(5) << maliciousMinersPower << std::endl
+				   << "kaspalike_power=" << std::fixed << std::setprecision(5) << kaspaMinersPower << std::endl
 	               << "honest_power=" << std::fixed << std::setprecision(5) << honestMinersPower << std::endl;
 }
 
@@ -318,6 +332,12 @@ void Simulation::logProgress(uint32_t blockId) {
 		ss << "\t| Malicious miner[" << firstMaliciousMinerIndex << "] - "
 		   << std::fixed << std::setprecision(2)
 		   << double(miners[firstMaliciousMinerIndex].getMempoolFullness()) / mpCapacity * 100 << "%";
+	}
+
+	if (kaspalikeMinersCount > 0) {
+		ss << "\t| Kaspa-like miner[" << firstKaspalikeMinerIndex << "] - "
+		   << std::fixed << std::setprecision(2)
+		   << double(miners[firstKaspalikeMinerIndex].getMempoolFullness()) / mpCapacity * 100 << "%";
 	}
 
 	ss << std::endl;
@@ -401,10 +421,23 @@ void Simulation::errorOutOfTxsExit(Miner &miner) {
 	for (Miner &searched_miner: miners) {
 		ss << searched_miner.getMinerId() << "\t" << searched_miner.getMempoolFullness() << std::endl;
 	}
+	auto name = "none";
+	switch(miner.getType()) {
+		case HONEST:
+			name = "Honest";
+			break;
+		case MALICIOUS:
+			name = "Malicious";
+			break;
+		case KASPA_LIKE:
+			name = "Kaspa-like";
+			break;
+	}
+
 	ss << "=========================== Start of snapshot ===========================" << std::endl
 	   << "Miner[" << miner.getMinerId() << "] was chosen to generate block but has run of out of transactions"
 	   << std::endl
-	   << "Miner[" << miner.getMinerId() << "] - " << (miner.getType() == HONEST ? "Honest" : "Malicious") << " with "
+	   << "Miner[" << miner.getMinerId() << "] - " << name << " with "
 	   << miner.getMiningPower() * 100 << "% mining power" << std::endl;
 
 	progressOutput << ss.str();

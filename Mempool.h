@@ -156,6 +156,8 @@ public:
 	 * @return Iterator to inserted item
 	 */
 	HtabIterator insert(uint32_t minerId, uint64_t txId, uint32_t fee);
+
+	HtabIterator getGroup(size_t start);
 };
 
 

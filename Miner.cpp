@@ -62,6 +62,26 @@ void Miner::mineBlock(uint32_t blockNumber) {
 
 			mempool.eraseTransaction(it);
 		}
+	} else if (type == KASPA_LIKE) {
+		for (uint32_t i = 0; i < simulation.getBlockSize(); ++i) {
+			std::random_device rd; // obtain a random number from hardware
+            std::mt19937 gen(rd()); // seed the generator
+            std::uniform_int_distribution<> distr(0, 4); // define the range
+			auto b = distr(gen);
+			// get transaction group
+			size_t range_top = (b+1) * mempool.size() / 5;
+
+			HtabIterator it = mempool.getGroup(range_top - 1);
+			uint64_t txId = it.iterator->txId;
+			uint32_t fee = it.iterator->fee;
+
+			minedBlock.transactions.push_back({txId, fee});
+
+			// Log mined block
+			simulation.logData(txId, fee, minedBlock.id, depth, minerId);
+
+			mempool.eraseTransaction(it);
+		}
 	}
 
 	lastMinedBlockId++;
