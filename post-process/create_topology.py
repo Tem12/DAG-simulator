@@ -54,7 +54,7 @@ def main():
     PATH_NODES_TEST = total_node_count  # Number of nodes to create average hop count
 
     MAX_DIFF_EDGES_TRY = 30
-    MAX_EDGES_COUNT_TRY = 10
+    MAX_EDGES_COUNT_TRY = 1
 
     if END_NODES_TEST >= total_node_count:
         print('Nodes to test must smaller than all nodes in output topology')
@@ -81,11 +81,12 @@ def main():
                 
             # If it was not possible to find some node to connect, cut off remaining edges,
             # however, this node can still receive connection from other node
-            if edges_count_try + 1 < MAX_EDGES_COUNT_TRY:
+            if edges_count_try + 1 < MAX_EDGES_COUNT_TRY or MAX_EDGES_COUNT_TRY == 1:
                 edges = node_peers[i]['free']
             else:
-                edge_drop_counter += node_peers[i]['free']
                 edges = 0
+                if MAX_DIFF_EDGES_TRY != 1:
+                    edge_drop_counter += node_peers[i]['free']
 
             for e in range(0, edges):
                 edge_added = 0
@@ -137,6 +138,8 @@ def main():
                     while True:
                         if len(sorted_score_keys) == 0:
                             edge_added += 1
+                            if MAX_EDGES_COUNT_TRY == 1 and edge_added == MAX_DIFF_EDGES_TRY:
+                                edge_drop_counter += 1
                             break
                             
                         new_end_node = sorted_score_keys[random.randint(math.ceil(
