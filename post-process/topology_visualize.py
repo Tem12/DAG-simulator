@@ -3,6 +3,7 @@ import random
 import networkx as nx
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors, path
 import statistics
 
 # Traverse graph from node X to node Y from all nodes stored in configuration. Do this process n times for groups where:
@@ -40,12 +41,16 @@ def main():
 
                 G.add_edge(node1, node2, weight=delay)
 
-    pos = nx.spring_layout(G, k=0.15, iterations=50)
-    nx.draw_networkx(G, pos=pos)
+    # pos = nx.spring_layout(G, k=100.0, iterations=200)
+    nx.draw_networkx(G, node_size=0.05, font_size=0.05, width=0.01,
+                     alpha=0.5, node_color='#069AF390')
+    # nx.draw(G, node_size=10)
 
     ax = plt.gca()
+    plt.figure(1, figsize=(100000, 100000), dpi=600)
     plt.axis("off")
-    plt.savefig('./vizualization.pdf')
+    plt.tight_layout()
+    plt.savefig(f'{args.config[:-4]}.pdf')
 
 
 if __name__ == '__main__':
