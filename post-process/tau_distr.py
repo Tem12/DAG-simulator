@@ -166,7 +166,7 @@ def main():
             else:
                 weight = round(nx.path_weight(g, path=[i, j], weight='weight'))
                 if weight == 0:
-                    weight = float(propDelayGen.rvs())
+                    weight = int(propDelayGen.rvs())
                 histData.append(weight)
                 f.write(f'biconnect={i} {j} {weight}\n')
         resolved_nodes[i] = True
@@ -176,6 +176,12 @@ def main():
     plt.figure(1, figsize=(16, 9), dpi=600)
     plt.savefig(f'hist_{args.name}.pdf')
     plt.show()
+
+    fc = open(f'hist_data_{args.name}.csv', 'w')
+    fc.write('seconds, occur count')
+    for prob_i in range(min(histData), max(histData) + 1):
+        fc.write(f'{prob_i}, {histData.count(prob_i)}\n')
+    fc.close()
 
 
 def avg(arr):
