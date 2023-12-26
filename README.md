@@ -1,56 +1,90 @@
-# Mining / block propagation simulator
+# DAG-Sword: A Simulator of Large-Scale Network Topologies for DAG-Oriented Proof-of-Work Blockchains
+Purpose of this simulator is to simulate realistic network topology of DAG-based consensus protocols while capturing information on miners’ profits and transaction throughput of the network and study study malicious behaviors as part of incentive-oriented attacks.
 
-Simulates new block announcements propagating across the Bitcoin
-network.
+## Overview
+We propose a simulator for DAG-oriented consensus protocols to simulate large-scale blockchain networks with topology resembling Bitcoin network.
+Our simulator focuses on obtaining knowledge about miners' profits, network transaction throughput (i.e., the number of processed transactions per second), and the transaction collision rate (i.e., the number of transactions that are duplicates and thus do not contribute to the throughput). 
+A miner that produces a block is rewarded from two sources: the block reward and transaction fees. The value of the block reward is deterministic and is known during mining. 
+The reward from transaction fees is simply the sum of all the transaction fees in the block.
+The most well-known DAG-protocols that aim at maximizing the transactional throughput (i.e., [PHANTOM & GHOSTDAG](https://doi.org/10.1145/3479722.3480990), and [Spectre](https://eprint.iacr.org/2016/1159)) propose to select transactions into block *randomly* (not necessarily uniformly at random) to avoid potential transaction collision in favor the throughput.
+However, greedy miners in anonymous permissionless systems such as blockchain (without a possibility to punish misbehavior) might violate this rule and select transactions based on the fees (greedily) and thus attempt to maximize their profits.
+Therefore, the incentive strategy of the protocol impacts the properties of DAG protocols, such as fair distribution of rewards and throughput.
 
-Use these command-line options to control the simulation parameters:
+For more information, please refer to original paper: [https://arxiv.org/abs/2311.04638](https://arxiv.org/abs/2311.04638)
+
+## Installation
+To run the DAG-Sword simulator, follow these steps:
+
+1. Clone this repository to your local machine.
+    ```
+    git clone https://github.com/Tem12/DAG-simulator.git
+    ```
+
+2. Enter simulator directory.
+    ```
+    cd DAG-simulator
+    ```
+
+3. Compile C++ implementation.
+    ```bash
+    make   
+    ```
+
+4. Install python 3 dependencies for post-process.
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+## Usage
 
 ```
-  --help                     show options
-  --blocks arg (=2016)       number of blocks to simulate
-  --latency arg (=1)         block relay/validate latency (in seconds) to
-                             simulate
-  --runs arg (=1)            number of times to run simulation
-  --rng_seed arg (=0)        random number generator seed
-  --config arg (=mining.cfg) Mining config filename
+./dag-simulator OPTIONS
 ```
 
-The network topology and miner configuration is specified in
-a config file; see the .cfg files here for examples.
+### Required options
+| Argument | Description |
+| --- | --- |
+|  `--config PATH`                | input configuration file |
 
-Config file options:
+### Optional Options:
+| Argument | Default value: | Description |
+| --- | --- | --- |
+|  `--help`                      | - | shows help message |
+|  `--seed INT`                  | 0 | seed for random number generator |
+|  `--blocks UINT`               | 1000  | number of blocks to simulate |
+|  `--block_size UINT`           | 100  | number of transactions in block |
+|  `--mp_capacity UINT`          | 5000  | mempool capacity for each miner |
+|  `--init_tx_count UINT`        | 1000  | initial transaction count to generate on start |
+|  `--max_tx_gen_count UINT`     | 100 | max number of transactions in single generation |
+|  `--min_tx_gen_count UINT`     | 150 | min number of transactions in single generation |
+|  `--max_tx_gen_time UINT`      | 10  | max seconds of simulation time to generate new transaction  |
+|  `--min_tx_gen_time UINT`      | 20  | min seconds of simulation time to generate new transaction |
+|  `--lambda UINT`               | 20  | block creation rate in seconds |
+|  `--honest_random_remove`      | - | flag - honest miners remove transactions randomly on full mempool |
+|  `--mp_print_data`             | - | flag - output mempool stats of all miners during simulation |
+
+Simulation outputs are stored in directory `output/`
+
+#### Example
+Start simulation of 2000 blocks, where each block has size of 150 transactions in network inspired by Bitcoin where 2 greedy (malicious) miners have 40% of total mining power.
 ```
-miner=hashrate type
-biconnect=m n connection_latency
-```
-
-I don't do autotools, so you'll have to edit the Makefile
-unless you're compiling on OSX. The only dependency is
-boost (but you do need a c++11-capable C++ compiler).
-
-
-Example runs:
-
-```
-$ ./mining_simulator
-Simulating 2016 blocks, default latency 1secs, with 10 miners over 1 runs
-Configuration: Ten equal miners, connected in a ring
-Orphan rate: 0.1984%
-Miner hashrate shares (%): 10 10 10 10 10 10 10 10 10 10
-Miner block shares (%): 10.49 9.891 9.692 10.49 8.052 9.891 10.54 9.99 9.245 11.73
-
-$ mining_simulator --latency 20
-Simulating 2016 blocks, default latency 20secs, with 10 miners over 1 runs
-Configuration: Ten equal miners, connected in a ring
-Orphan rate: 3.075%
-Miner hashrate shares (%): 10 10 10 10 10 10 10 10 10 10
-Miner block shares (%): 10.39 9.98 9.724 10.44 8.035 9.826 10.7 9.928 9.314 11.67
-
-$ mining_simulator --latency 20 --config mining_30.cfg --runs 100
-Simulating 2016 blocks, default latency 20secs, with 8 miners over 100 runs
-Configuration: 30% miner, with 7 10% miners, selected connectivity
-Orphan rate: 2.715%
-Miner hashrate shares (%): 30 10 10 10 10 10 10 10
-Miner block shares (%): 30.25 9.922 10.05 9.959 9.918 9.929 9.932 10.05
+./dag-simulator --blocks 2000 --block_size 150 --config configs/btc-payoff_2h_2m-40-v1.cfg
 ```
 
+## Post-process
+
+### Collision analysis
+This script requires only one argument, a path to a data file generated by simulation. It automatically parses the name and opens the metadata file to get all the required information. The produced output contains the number of unique transactions and transactions with two or more duplicates (up to five). It also outputs duplicate transactions along with the weighted sum of duplicated transactions and the duplication rate.
+
+#### Example
+```
+python3 post-process/collision_analysis.py --data outputs/data_btc-payoff_2h_2m-40-v1.cfg_0000.csv
+```
+
+### Profit analysis
+This script also gets all the required information from metadata. An additional required argument is the mining power threshold. This argument specifies the minimum mining power required for the miner to be analyzed separately (i.e., two greedy miners where each of them has 20% mining power). Miners below the threshold will be merged during the analysis. As an optional argument, there can be a specified reward per block.
+
+#### Example
+```
+python3 post-process/profit_analysis.py --data outputs/data_btc-payoff_2h_2m-40-v1.cfg_0000.csv --power-thold 0.2
+```
