@@ -60,6 +60,7 @@ class Simulation {
 
 	uint32_t honestMinersCount = 0;
 	uint32_t maliciousMinersCount = 0;
+	uint32_t kaspalikeMinersCount = 0;
 
 	std::ofstream progressOutput;
 	std::ofstream mempoolOutput;
@@ -72,8 +73,10 @@ class Simulation {
 	// Store index of each miner type used in progress logging
 	size_t firstHonestMinerIndex = 0;
 	size_t firstMaliciousMinerIndex = 0;
+	size_t firstKaspalikeMinerIndex = 0;
 	bool honestMinerIndexSet = false;
 	bool maliciousMinerIndexSet = false;
+	bool kaspalikeMinerIndexSet = false;
 
 	size_t txId = 0;
 

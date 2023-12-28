@@ -63,6 +63,9 @@ std::vector<Miner> ConfigParser::parseConfig(Simulation &simulation) const {
 			else if (tokens[1] == "malicious") {
 				minerType = MALICIOUS;
 			}
+			else if (tokens[1] == "kaspa-like") {
+				minerType = KASPA_LIKE;
+			}
 			else {
 				throw std::runtime_error(
 						"Invalid configuration file structure - miner contains invalid type");

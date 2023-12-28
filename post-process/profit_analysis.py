@@ -49,6 +49,7 @@ def main():
     read_block_size = False
     read_miners_honest = False
     read_miners_malicious = False
+    read_miners_kaspalike = False
 
     blocks = 0
     block_size = 0
@@ -85,7 +86,7 @@ def main():
     with open(metadata_path, 'r') as metadata_file:
         for row in metadata_file:
             value = row.rstrip('\n')
-            if read_config and read_seed and read_blocks and read_block_size and read_miners_honest and read_miners_malicious:
+            if read_config and read_seed and read_blocks and read_block_size and read_miners_honest and read_miners_malicious and read_miners_kaspalike:
                 break
 
             if value.startswith('cfg_path='):
@@ -106,6 +107,9 @@ def main():
             elif value.startswith('honest_miners='):
                 miners_count += int(value[len('honest_miners='):])
                 read_miners_honest = True
+            elif value.startswith('kaspalike_miners='):
+                miners_count += int(value[len('kaspalike_miners='):])
+                read_miners_honest = True
 
     if not read_config:
         print(f'Metadata does not contain config path', file=sys.stderr)
@@ -125,7 +129,7 @@ def main():
 
     # =================================================
 
-    honest_miners, malicious_miners = parse_config(config, args.power_thold)
+    honest_miners, malicious_miners, kaspalike_miners = parse_config(config, args.power_thold)
 
     tx_count = blocks * block_size
 
@@ -248,12 +252,25 @@ def main():
 
     ##### Assign profits to honest and malicious that will go to output
     for id in honest_miners:
+        if id >= len(miners_profit):
+            continue
         honest_miners[id]['profit'] = miners_profit[id] + miners_block_profit[id]
-        honest_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
+        if miners_tx_count[id]:
+            honest_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
 
     for id in malicious_miners:
+        if id >= len(miners_profit):
+            continue
         malicious_miners[id]['profit'] = miners_profit[id] + miners_block_profit[id]
-        malicious_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
+        if miners_tx_count[id]:
+            malicious_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
+
+    for id in kaspalike_miners:
+        if id >= len(miners_profit):
+            continue
+        kaspalike_miners[id]['profit'] = miners_profit[id] + miners_block_profit[id]
+        if miners_tx_count[id]:
+            kaspalike_miners[id]['tx_collision_index'] = float(miners_collision_sum[id]) / miners_tx_count[id]
 
     if args.halving_boost and len(malicious_miners) > 0:
             # Move X perc. profit from malicious actors to honest as penalization
@@ -298,6 +315,14 @@ def main():
             print(f'Malicious miner #{i} profit: {profit}%, txci: {round(malicious_miners[id]["tx_collision_index"], 2)}')
             i += 1
 
+        i = 0
+        for id in kaspalike_miners:
+            profit = round(kaspalike_miners[id]["profit"] / total_profit * 100, 2)
+            profits_sum += profit
+            print(
+                f'Kaspa-like miner #{i} profit: {profit}%, txci: {round(kaspalike_miners[id]["tx_collision_index"], 2)}')
+            i += 1
+
         print(f'Profit of the remaining miners: {round(100.0 - profits_sum, 2)}%')
 
         if args.block_tx_reward_avg_inc or args.block_tx_reward_avg_non:
@@ -337,6 +362,15 @@ def main():
             profits_sum += profit
             print(f'{profit}', end='')
 
+        for id in kaspalike_miners:
+            if print_comma_sep:
+                print(',', end='')
+            else:
+                print_comma_sep = True
+            profit = round(kaspalike_miners[id]["profit"] / total_profit * 100, 4)
+            profits_sum += profit
+            print(f'{profit}', end='')
+
         if print_comma_sep:
                 print(',', end='')
         print(f'{round(100.0 - profits_sum, 4)}', end='')
@@ -349,6 +383,7 @@ def main():
 def parse_config(file_path, threshold):
     honest_miners = {}
     malicious_miners = {}
+    kaspalike_miners = {}
 
     with open(file_path, 'r') as file:
         i = 0
@@ -366,12 +401,14 @@ def parse_config(file_path, threshold):
 
                 if tokens[1] == 'honest':
                     honest_miners[i] = {'power': power, 'profit': 0.0, 'tx_collision_index': 0.0}
-                else:
+                elif tokens[1] == "malicious":
                     malicious_miners[i] = {'power': power, 'profit': 0.0, 'tx_collision_index': 0.0}
+                elif tokens[1] == "kaspa-like":
+                    kaspalike_miners[i] = {'power': power, 'profit': 0.0, 'tx_collision_index': 0.0}
 
                 i += 1
 
-    return honest_miners, malicious_miners
+    return honest_miners, malicious_miners, kaspalike_miners
 
 
 if __name__ == '__main__':

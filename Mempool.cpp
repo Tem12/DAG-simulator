@@ -7,6 +7,7 @@
  */
 
 #include "Mempool.h"
+#include <iostream>
 
 HtabItem::HtabItem(std::string &_key, uint64_t _txId, uint32_t _fee) : key(_key), txId(_txId), fee(_fee) {}
 
@@ -96,6 +97,18 @@ HtabIterator Mempool::getRandomTransaction(std::mt19937 randomGen) {
 }
 
 HtabIterator Mempool::getSortedTransactionDescending() {
+	auto it = multimapItems.rbegin();
+	return {it->second.first, it->second.second};
+}
+
+HtabIterator Mempool::getGroup(size_t start) {
+	size_t i = 0;
+	for ( auto const& [first, second] : multimapItems) {
+		if (i++ == start) {
+			return {second.first, second.second};
+		}
+	}
+	// takes the top one if this point is reached, which should never happen
 	auto it = multimapItems.rbegin();
 	return {it->second.first, it->second.second};
 }
